@@ -43,6 +43,7 @@ const ITEMS = ["a", "b", "c"].map((key, index) => ({
       { id: "study", name: "学习", createdAt: 2 }
     ],
     laterOnActiveProject: "unfiled",
+    laterOnCovers: { "item-a": "cover-a", "item-b": "cover-b", "item-c": "cover-c" },
     laterOnSettings: {}
   };
 
@@ -55,6 +56,7 @@ const ITEMS = ["a", "b", "c"].map((key, index) => ({
   const { document } = window;
 
   // 记录「打开文章」这类副作用：多选时不该出现它们的身影。
+  let failNextWrite = false;
   const navigations = [];
   const createdWindows = [];
   window.chrome = {
@@ -67,6 +69,7 @@ const ITEMS = ["a", "b", "c"].map((key, index) => ({
           return out;
         },
         set: async (patch) => {
+          if (failNextWrite && patch.laterOnItems) { failNextWrite = false; throw new Error("fixture storage failure"); }
           for (const [key, value] of Object.entries(patch)) store[key] = JSON.parse(JSON.stringify(value));
         }
       },
@@ -99,6 +102,7 @@ const ITEMS = ["a", "b", "c"].map((key, index) => ({
   window.eval(DIALOG_SOURCE);
   window.eval(PICKER_SOURCE);
   window.eval(TAB_NAVIGATION_SOURCE);
+  require('./helpers/item-mutation')(window);
   window.eval(LIBRARY_SOURCE);
 
   const tick = (ms = 20) => new Promise((resolve) => window.setTimeout(resolve, ms));
@@ -194,12 +198,24 @@ const ITEMS = ["a", "b", "c"].map((key, index) => ({
   check("每行包含缩略图与数量", !!pickerShadow?.querySelector(".lon-folder-icon") && !!pickerShadow?.querySelector(".lon-folder-count"));
   const workRow = [...pickerShadow.querySelectorAll(".lon-folder")]
     .find((row) => row.querySelector(".lon-folder-name")?.textContent === "工作");
+  const pointerDown = (el) => el.dispatchEvent(new window.MouseEvent("pointerdown", {
+    bubbles: true, cancelable: true, composed: true
+  }));
+  pointerDown(workRow);
   click(workRow);
+  check("点击浮层项目保留两篇选中状态", grid.classList.contains("selecting") && bulkCount() === "已选 2 篇", bulkCount());
+  pointerDown(pickerShadow.querySelector(".lon-primary"));
   click(pickerShadow.querySelector(".lon-primary"));
   await tick(80);
   check("两篇都移动到所选项目", store.laterOnItems.filter((item) => ["item-a", "item-b"].includes(item.id)).every((item) => item.projectId === "work"), JSON.stringify(store.laterOnItems.map((item) => [item.id, item.projectId])));
   check("移动后自动退出多选", !grid.classList.contains("selecting") && !document.querySelector("#bulkBar").classList.contains("is-open"));
   check("给出批量移动完成提示", /已将 2 篇移到「工作」/.test(document.querySelector("#toast").textContent), document.querySelector("#toast").textContent);
+
+  console.log("\n── 点击页面空白仍退出多选 ──");
+  click(document.querySelector("#selectMode"));
+  click(cardOf("item-c"));
+  pointerDown(document.body);
+  check("空白处退出多选并清空选择", !grid.classList.contains("selecting") && !isSelected("item-c") && bulkCount() === "已选 0 篇");
 
   console.log("\n── 退出多选后，点文章要能正常打开 ──");
   check("退出了多选状态", !grid.classList.contains("selecting"));
@@ -209,6 +225,46 @@ const ITEMS = ["a", "b", "c"].map((key, index) => ({
   await tick(120);
   check("正常模式下点标题不会去勾选它", isSelected("item-c") === false);
   check("文章确实被打开了", navigations.length === beforeNavigations + 1, `${navigations.length - beforeNavigations} 次跳转`);
+
+  console.log("\n── 批量删除：真实 pointerdown + click 不能清空待删除选择 ──");
+  click(document.querySelector('.project-nav[data-project="work"]'));
+  await tick();
+  click(document.querySelector("#selectMode"));
+  click(cardOf("item-a"));
+  click(cardOf("item-b"));
+  click(document.querySelector("#bulkDelete"));
+  await tick();
+  let deleteDialog = document.querySelector('.lod-root:not([hidden])');
+  check("确认框显示删除两篇", /2/.test(deleteDialog?.querySelector('.lod-title')?.textContent || ''));
+  pointerDown(deleteDialog.querySelector('.lod-cancel'));
+  click(deleteDialog.querySelector('.lod-cancel'));
+  await tick(300);
+  check("取消删除保留数据和两篇选择", store.laterOnItems.length === 3 && bulkCount() === "已选 2 篇", bulkCount());
+  if (!grid.classList.contains('selecting')) {
+    click(document.querySelector("#selectMode"));
+    click(cardOf("item-a"));
+    click(cardOf("item-b"));
+  }
+  click(document.querySelector("#bulkDelete"));
+  await tick();
+  deleteDialog = document.querySelector('.lod-root:not([hidden])');
+  failNextWrite = true;
+  pointerDown(deleteDialog.querySelector('.lod-ok'));
+  click(deleteDialog.querySelector('.lod-ok'));
+  await tick(300);
+  check("写入失败保留网页、封面和勾选，并提示重试", store.laterOnItems.length === 3 && !!cardOf('item-a') && bulkCount() === '已选 2 篇' && store.laterOnCovers['item-a'] === 'cover-a' && /操作失败/.test(document.querySelector('#toast').textContent));
+  click(document.querySelector("#bulkDelete"));
+  await tick();
+  deleteDialog = document.querySelector('.lod-root:not([hidden])');
+  // 模拟另一处新增网页，存储广播尚未同步到当前界面。
+  store.laterOnItems.push({ ...ITEMS[2], id: 'recent', title: '新添加的网页' });
+  pointerDown(deleteDialog.querySelector('.lod-ok'));
+  click(deleteDialog.querySelector('.lod-ok'));
+  await tick(300);
+  check("确认后只删除选中的两篇，未选网页保留", store.laterOnItems.length === 2 && store.laterOnItems[0].id === 'item-c' && store.laterOnItems[1].id === 'recent', JSON.stringify(store.laterOnItems.map(item => item.id)));
+  check("清理被删网页封面并保留未选封面", !store.laterOnCovers["item-a"] && !store.laterOnCovers["item-b"] && store.laterOnCovers["item-c"] === "cover-c");
+  check("删除后界面移除对应卡片并退出多选", !cardOf('item-a') && !cardOf('item-b') && !grid.classList.contains('selecting'));
+  check("删除提示数量正确", /已删除 2 篇/.test(document.querySelector('#toast').textContent), document.querySelector('#toast').textContent);
 
   console.log(failures === 0 ? "\n全部检查通过 🎉" : `\n有 ${failures} 项失败`);
   if (failures) process.exitCode = 1;

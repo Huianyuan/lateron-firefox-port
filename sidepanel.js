@@ -42,6 +42,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
 let items = [];
 let projects = [];
+let archivedProjectIds = new Set();
 let currentItem = null;
 let filter = DEFAULT_FILTER;
 let query = "";
@@ -170,7 +171,7 @@ function slowConclusion(seg) {
     if (key === "migrate") return `Migrating old covers took ${ms} ms. This should only happen once after upgrading.`;
     return `Finishing up took ${ms} ms.`;
   }
-  if (key === "page") return "「准备页面」占了大头 → 是 Chrome 打开侧边栏 / 加载页面文件慢，跟保存的网页数量无关。";
+  if (key === "page") return "「准备页面」占了大头 → 是 Chrome 打开侧边栏 / 加载页面文件慢，跟添加的网页数量无关。";
   if (key === "cache") return `「读本地缓存」占了大头（${ms} 毫秒）→ 侧栏的秒开快照读取慢，接下来本次会话会直接跳过它，不再反复卡。`;
   if (key === "data") return `「读取网页数据」占了大头（${ms} 毫秒）→ 本地存储冷的时候这一次读取会慢，列表已先用缓存画出来了。`;
   if (key === "paint") return `「画第一屏」占了大头（${ms} 毫秒）→ 卡片太多，一次画不完（已分批，剩下的后台续画）。`;
@@ -338,7 +339,8 @@ async function init() {
   // 早期版本把封面 base64 直接塞在条目里，能塞到好几兆，读完必然慢。
   try { seg.bytes = JSON.stringify(stored[STORAGE_KEY] || []).length; } catch { /* 量不出来就不量 */ }
   items = normalizeItems(migrated || stored[STORAGE_KEY]);
-  projects = stored[PROJECTS_KEY] || [];
+  archivedProjectIds = new Set((stored[PROJECTS_KEY] || []).filter((project) => project.archived).map((project) => project.id));
+  projects = (stored[PROJECTS_KEY] || []).filter((project) => !project.archived);
   activeProject = normalizeProject(stored[ACTIVE_PROJECT_KEY]);
   currentItemId = stored[CURRENT_ITEM_KEY] || null;
   autoMarkRead = (stored[SETTINGS_KEY] || {}).autoMarkRead !== false;
@@ -370,14 +372,16 @@ chrome.storage.onChanged.addListener((changes, area) => {
     items = normalizeItems(changes[STORAGE_KEY].newValue || []);
     render();
     renderProjectFilters();
-    if (currentItem?.url) syncCurrentTabItem(currentItem.url);
+    // 阅读状态等数据刷新不能按旧标签页覆盖用户刚选择的项目。
+    if (currentItem?.url) syncCurrentTabItem(currentItem.url, { followProject: false });
   }
   if (area === "local" && changes[COVERS_KEY]) {
     covers = changes[COVERS_KEY].newValue || {};
     render();
   }
   if (area === "local" && changes[PROJECTS_KEY]) {
-    projects = changes[PROJECTS_KEY].newValue || [];
+    archivedProjectIds = new Set((changes[PROJECTS_KEY].newValue || []).filter((project) => project.archived).map((project) => project.id));
+    projects = (changes[PROJECTS_KEY].newValue || []).filter((project) => !project.archived);
     if (activeProject !== "unfiled" && !projects.some((project) => project.id === activeProject)) activeProject = "unfiled";
     render();
     renderProjectFilters();
@@ -484,7 +488,8 @@ async function loadCurrentPage() {
     );
     if (generation !== loadGeneration) return;
     if (response?.ok && response.metadata) {
-      applyCurrentPage({ ...fallback, ...response.metadata, url: tab.url }, generation);
+      // 延迟返回的摘要/封面只补资料，不再次切换用户已选择的项目。
+      applyCurrentPage({ ...fallback, ...response.metadata, url: tab.url }, generation, { followProject: false });
     }
   } catch (error) {
     if (generation !== loadGeneration) return;
@@ -492,10 +497,10 @@ async function loadCurrentPage() {
   }
 }
 
-function applyCurrentPage(result, generation) {
+function applyCurrentPage(result, generation, options) {
   if (generation !== loadGeneration) return;
   currentItem = { ...result, title: result.title || result.url };
-  syncCurrentTabItem(currentItem.url);
+  syncCurrentTabItem(currentItem.url, options);
   document.querySelector("#currentTitle").textContent = currentItem.title;
   document.querySelector("#currentSource").textContent = currentItem.source;
   if (currentItem.image) setCurrentThumb(currentItem.image);
@@ -523,9 +528,9 @@ function syncSaveButtonState(isSaved) {
   saveButton.classList.toggle("saved", isSaved);
   saveButton.disabled = isSaved || !currentItem;
   saveButton.querySelector("span").textContent = isSaved ? "✓" : "＋";
-  saveButton.querySelector(".save-label").textContent = tr(isSaved ? "saved" : "saveCurrent");
-  saveButton.title = tr(isSaved ? "saved" : "saveCurrent");
-  saveButton.setAttribute("aria-label", tr(isSaved ? "saved" : "saveCurrent"));
+  saveButton.querySelector(".save-label").textContent = tr(isSaved ? "currentAdded" : "saveCurrent");
+  saveButton.title = tr(isSaved ? "currentAdded" : "saveCurrent");
+  saveButton.setAttribute("aria-label", tr(isSaved ? "currentAdded" : "saveCurrent"));
 }
 
 function fallbackMetadata(tab) {
@@ -542,7 +547,7 @@ function fallbackMetadata(tab) {
 
 // 当前标签页和收藏条目用同一套网址归一化规则比较：忽略 www、末尾斜杠、追踪参数和 hash，
 // 避免同一篇文章因为分享链接参数不同而匹配不上。
-function syncCurrentTabItem(url) {
+function syncCurrentTabItem(url, { followProject = true } = {}) {
   const normalize = globalThis.LaterOnUrl?.normalize || ((value) => String(value || "").trim().toLowerCase());
   const normalized = normalize(url);
   const matched = normalized
@@ -558,7 +563,7 @@ function syncCurrentTabItem(url) {
     // 切换到另一个已收藏标签页时，目标文章可能属于另一个项目。
     // 必须先切换项目再定位，否则它会被旧项目的筛选挡住，卡片根本不在 DOM 里。
     const targetProject = normalizeProject(matched.projectId || "unfiled");
-    if (targetProject !== activeProject) {
+    if (followProject && targetProject !== activeProject) {
       activeProject = targetProject;
       renderProjectFilters();
       render();
@@ -953,6 +958,7 @@ function render() {
     // 搜索是全局的（和全屏页同一个规矩）：搜索框里有字时一律在「全部收藏」里找，
     // 不受上面那排项目筛选影响——否则在某个项目里搜一个明明存在的标题会一无所获，
     // 还以为是收藏丢了。「未读 / 已读」那一档仍然生效，它是用户自己拨过去的开关。
+    if (archivedProjectIds.has(item.projectId)) return false;
     const matchesProject = !!query
       || activeProject === "all"
       || (activeProject === "unfiled" ? !item.projectId : item.projectId === activeProject);
@@ -1163,7 +1169,28 @@ function renderProjectFilters() {
     });
     container.append(button);
   });
+  // 等本轮布局完成，只移动横向项目栏，保留正在阅读的网页滚动位置。
+  nextFrame(ensureActiveProjectVisible);
+}
 
+function ensureActiveProjectVisible() {
+  const container = document.querySelector("#projectFilters");
+  const active = container?.querySelector(".project-filter.active");
+  if (!active || !container.clientWidth) return;
+  const viewport = container.getBoundingClientRect();
+  const button = active.getBoundingClientRect();
+  const gap = 8;
+  const left = viewport.left + gap;
+  const right = viewport.left + container.clientWidth - gap;
+  let delta = 0;
+  if (button.left < left) delta = button.left - left;
+  else if (button.right > right) delta = button.right - right;
+  if (delta) {
+    container.scrollLeft = Math.max(0, Math.min(
+      container.scrollWidth - container.clientWidth,
+      container.scrollLeft + delta
+    ));
+  }
 }
 
 function normalizeProject(projectId) {
@@ -1230,7 +1257,7 @@ function saveSlimCache() {
   cacheSaveTimer = setTimeout(() => {
     cacheSaveTimer = null;
     try {
-      const json = JSON.stringify(items.slice(0, CACHE_PREVIEW_LIMIT));
+      const json = JSON.stringify(items.filter((item) => !archivedProjectIds.has(item.projectId)).slice(0, CACHE_PREVIEW_LIMIT));
       if (json.length < 2000000) localStorage.setItem(CACHE_KEY, json);
       else localStorage.removeItem(CACHE_KEY);
     } catch { /* localStorage 用不了就算了，不影响正常功能 */ }
@@ -1248,8 +1275,14 @@ function readSlimCache() {
 
 // 用户上传的封面增删后，把 COVERS_KEY 整体写回存储。
 async function saveCovers(next) {
-  covers = next;
-  try { await chrome.storage.local.set({ [COVERS_KEY]: covers }); } catch { /* 写不进去时本地照样显示 */ }
+  try {
+    await chrome.storage.local.set({ [COVERS_KEY]: next });
+    covers = next;
+    return true;
+  } catch {
+    status.textContent = tr("operationFailed");
+    return false;
+  }
 }
 
 // 缩略图：卡片 DOM 是复用的，用户自己换/移除封面后要能同步刷新。
@@ -1386,12 +1419,12 @@ async function editItem(item) {
   const originalCover = resolveImage(item);
   if (typeof values.cover === "string" && values.cover !== originalCover) {
     if (values.cover) {
-      await saveCovers({ ...covers, [item.id]: values.cover });
+      if (!await saveCovers({ ...covers, [item.id]: values.cover })) return;
       patch.image = `local://${item.id}`;
     } else {
       const nextCovers = { ...covers };
       delete nextCovers[item.id];
-      await saveCovers(nextCovers);
+      if (!await saveCovers(nextCovers)) return;
       patch.image = "";
     }
     // 记一笔：这是用户自己定的封面，之后再收藏同一网址时别用自动抓取的把它盖掉。
@@ -1442,18 +1475,23 @@ function safeTarget(url) {
   }
 }
 
-async function updateItem(id, patch) {
-  const next = { ...patch };
-  if (patch.status) {
-    next.read = patch.status === "done";  // 同步 read，兼容旧字段
-    // 记下「什么时候标成已读的」——自动清除从这个时刻起算（和全屏界面同一套规则）。
-    const current = items.find((item) => item.id === id);
-    next.doneAt = patch.status === "done"
-      ? (current?.status === "done" && Number(current.doneAt) ? current.doneAt : Date.now())
-      : null;
+async function commitItemMutation(operation, ids, patch) {
+  try {
+    const response = await chrome.runtime.sendMessage({ type: "MUTATE_ITEMS", operation, ids: [...ids], patch });
+    if (!response?.ok || !Array.isArray(response.items)) throw new Error(response?.error || "Item write failed");
+    items = normalizeItems(response.items);
+    covers = response.covers || {};
+    render();
+    renderProjectFilters();
+    return response;
+  } catch {
+    status.textContent = tr("operationFailed");
+    return null;
   }
-  items = items.map((item) => item.id === id ? { ...item, ...next } : item);
-  await chrome.storage.local.set({ [STORAGE_KEY]: items });
+}
+
+async function updateItem(id, patch) {
+  return !!(await commitItemMutation("update", [id], patch));
 }
 
 async function deleteItem(id) {
@@ -1463,23 +1501,14 @@ async function deleteItem(id) {
   // 万一还没就绪就直接删，别把删除卡死）。
   const raw = (target.title || "").trim() || tr("itemFallback");
   const title = raw.length > 26 ? `${raw.slice(0, 26)}…` : raw;
-  if (window.LaterOnDialog) {
-    const confirmed = await window.LaterOnDialog.confirm({
-      tone: "danger",
-      title: tr("deleteItemTitle", { title }),
-      message: tr("deleteCannotUndo"),
-      confirmText: tr("delete")
-    });
-    if (!confirmed) return;
-  }
-  items = items.filter((item) => item.id !== id);
-  await chrome.storage.local.set({ [STORAGE_KEY]: items });
-  // 删了收藏，它自己上传的封面也要跟着删，别留在存储里占地方。
-  if (covers[id]) {
-    const nextCovers = { ...covers };
-    delete nextCovers[id];
-    await saveCovers(nextCovers);
-  }
+  try { await ensureDialogLoaded(); }
+  catch { status.textContent = tr("operationFailed"); return; }
+  const confirmed = await window.LaterOnDialog.confirm({
+    tone: "danger", title: tr("deleteItemTitle", { title }),
+    message: tr("deleteCannotUndo"), confirmText: tr("delete")
+  });
+  if (!confirmed) return;
+  await commitItemMutation("delete", [id]);
 }
 
 function formatTime(timestamp) {

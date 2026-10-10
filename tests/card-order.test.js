@@ -91,6 +91,7 @@ async function boot({ items, orders = {}, settings = {}, activeProject = "unfile
     sidePanel: { open: async () => ({}), close: async () => ({}) }
   };
   window.eval(DIALOG_SOURCE);
+  require('./helpers/item-mutation')(window);
   window.eval(LIBRARY_SOURCE);
   const tick = (ms = 20) => new Promise((resolve) => window.setTimeout(resolve, ms));
   await tick();

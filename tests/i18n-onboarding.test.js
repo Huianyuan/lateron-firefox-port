@@ -24,7 +24,7 @@ assert.deepStrictEqual(
   Object.keys(dictionaries["zh-CN"]).sort(),
   "中英文词典必须包含完全相同的词条"
 );
-assert.strictEqual(dictionaries["zh-CN"].guideStepSaveTitle, "一键保存，随时继续浏览");
+assert.strictEqual(dictionaries["zh-CN"].guideStepSaveTitle, "一键添加，随时继续浏览");
 assert.strictEqual(dictionaries["zh-CN"].guideStepReadTitle, "全屏管理，侧栏继续浏览");
 assert.match(dictionaries["zh-CN"].guideStepReadHint, /30 天后自动清除/);
 

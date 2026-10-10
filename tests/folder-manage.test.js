@@ -4,7 +4,7 @@
 //  3) 重名不重复创建
 //  4) 双击改名 / 回车保存 / Esc 取消 / 点到别处自动保存 / 重名被拒绝
 //  5) 右键与「⋯」都能打开菜单，点别处或 Esc 关闭
-//  6) 删除项目：取消不删；确认后里面的收藏移到等待整理、当前项目切回全部
+//  6) 删除项目：取消不删；确认后项目及其中收藏一起删除、当前项目切回全部
 //  7) 拖拽收藏到项目仍然有效（监听挂在整行上）
 // 用 jsdom 而不是真浏览器，只是为了让这个检查能在命令行里快速反复跑。
 const fs = require("fs");
@@ -117,6 +117,7 @@ const dragEvent = (el, type, dataTransfer) => {
 
 window.eval(i18nSource);
 window.eval(dialogSource);
+require('./helpers/item-mutation')(window);
 window.eval(librarySource);
 
 const projectRows = () => [...document.querySelectorAll("#projectList .project-row")];
@@ -223,7 +224,7 @@ const cardFolderOptions = () => [...document.querySelectorAll(".card .project-se
   rightClick(rowOf("work").querySelector(".project-nav"));
   await tick(10);
   check("右键弹出菜单", !!document.querySelector(".folder-menu"));
-  check("菜单里是「置顶项目 / 重命名 / 编辑简介 / 删除项目」", menuItems().map((item) => item.textContent).join(" / ") === "置顶项目 / 重命名 / 编辑简介 / 删除项目", menuItems().map((i) => i.textContent).join(" / "));
+  check("菜单里是「置顶项目 / 重命名 / 编辑简介 / 归档项目 / 删除项目」", menuItems().map((item) => item.textContent).join(" / ") === "置顶项目 / 重命名 / 编辑简介 / 归档项目 / 删除项目", menuItems().map((i) => i.textContent).join(" / "));
   check("菜单顶部标着项目名", document.querySelector(".folder-menu-title")?.textContent === "工作与灵感");
   pointerdown(document.body);
   await tick(10);
@@ -252,7 +253,7 @@ const cardFolderOptions = () => [...document.querySelectorAll(".card .project-se
   check("删除前弹出了自定义弹窗（不再是浏览器自带）", !!dialog());
   check("弹窗是危险操作的红色主题", dialog()?.dataset.tone === "danger", dialog()?.dataset.tone);
   check("弹窗标题写明是哪个项目", /删除项目「工作与灵感」/.test(dialogText(".lod-title")), dialogText(".lod-title"));
-  check("弹窗写清会影响几篇网页", /2 篇网页会移到/.test(dialogText(".lod-message")), dialogText(".lod-message"));
+  check("弹窗写清会影响几篇网页", /2 篇网页将一起删除，删除后无法恢复/.test(dialogText(".lod-message")), dialogText(".lod-message"));
   check("确认按钮写明动作", dialogText(".lod-ok") === "删除项目", dialogText(".lod-ok"));
   click(dialog().querySelector(".lod-cancel"));
   await tick(300);
@@ -276,11 +277,11 @@ const cardFolderOptions = () => [...document.querySelectorAll(".card .project-se
   click(dialog().querySelector(".lod-ok"));
   await tick(300);
   check("确认后项目被删除", !store.laterOnProjects.some((p) => p.id === "work"));
-  check("收藏一篇都没丢", store.laterOnItems.length === 3, `${store.laterOnItems.length} 条`);
-  check("里面的收藏被移到「等待整理」", store.laterOnItems.every((item) => item.projectId !== "work"), store.laterOnItems.map((i) => i.projectId).join(","));
+  check("删除项目内的两篇，保留待整理资料", store.laterOnItems.length === 1 && store.laterOnItems[0].id === "i2", `${store.laterOnItems.length} 条`);
+  check("已删除项目没有残留收藏", store.laterOnItems.every((item) => item.projectId !== "work"), store.laterOnItems.map((i) => i.projectId).join(","));
   check("删除后自动切回「全部收藏」", store.laterOnActiveProject === "all", store.laterOnActiveProject);
   check("侧栏里已经没有这一行", !projectRows().some((row) => row.dataset.id === "work"));
-  check("「等待整理」计数同步更新", document.querySelector("#unfiledCount").textContent === "3", document.querySelector("#unfiledCount").textContent);
+  check("「等待整理」计数同步更新", document.querySelector("#unfiledCount").textContent === "1", document.querySelector("#unfiledCount").textContent);
   check("删除后菜单关闭", !document.querySelector(".folder-menu"));
 
   console.log("\n── 拖拽收藏到项目（监听已挪到整行）──");

@@ -600,3 +600,5 @@ footer { display: grid; grid-template-columns: auto minmax(0,1fr) auto; align-it
 .bulk-actions button.danger:hover { background: rgba(255,92,53,.34); }
 .bulk-actions .bulk-project { min-width: 122px; justify-content: space-between; }
 .bulk-project svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; opacity: .72; }
+
+.sidebar-setting.active { background: var(--glass-strong); color: var(--ink); }

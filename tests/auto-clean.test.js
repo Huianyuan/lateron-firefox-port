@@ -158,6 +158,22 @@ async function run() {
     check("只有旧 read 布尔的老收藏也不会被删", ids.includes("legacy2"), ids);
   }
 
+  console.log("\n── ⑦ 归档已读资料遵循相同清理期限 ──");
+  {
+    store.laterOnSettings = { autoCleanDays: 30 };
+    store.laterOnProjects = [{ id: "archived", name: "归档项目", archived: true }];
+    store.laterOnItems = [
+      item("archived-old", { projectId: "archived", status: "done", doneAt: ago(31) }),
+      item("archived-fresh", { projectId: "archived", status: "done", doneAt: ago(29) }),
+      item("archived-unread", { projectId: "archived" })
+    ];
+    await purge();
+    const ids = store.laterOnItems.map((it) => it.id);
+    check("归档中到期已读仍删除", !ids.includes("archived-old"));
+    check("归档中未到期和未读仍保留", ids.includes("archived-fresh") && ids.includes("archived-unread"));
+    check("自动清理不删除归档项目", store.laterOnProjects[0].archived === true);
+  }
+
   console.log(failures ? `\n❌ 有 ${failures} 项没通过` : "\n🎉 全部通过");
   process.exit(failures ? 1 : 0);
 }

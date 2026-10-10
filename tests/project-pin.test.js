@@ -148,7 +148,9 @@ const openMenu = async (id) => {
 const topOf = (index) => ROW_TOP + index * ROW_STEP;
 const midOf = (index) => topOf(index) + ROW_HEIGHT / 2;
 
+window.eval(fs.readFileSync(`${ROOT}/i18n.js`, "utf8"));
 window.eval(dialogSource);
+require('./helpers/item-mutation')(window);
 window.eval(librarySource);
 
 (async () => {

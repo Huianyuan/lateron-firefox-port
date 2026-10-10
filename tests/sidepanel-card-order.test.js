@@ -82,6 +82,7 @@ function dragEvent(type, target, { x = 10, y = 10 } = {}) {
 
 window.eval(i18n);
 window.eval(tabNavigation);
+require('./helpers/item-mutation')(window);
 window.eval(source);
 
 (async () => {

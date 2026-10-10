@@ -8,7 +8,7 @@
 //  5) 在别处点开另一篇 → 跟着高亮并滚过去
 //  6) 定位结果会记进 laterOnLocateDiag（设置页「自检信息」能看）
 //  7) 切到另一个项目里的已收藏标签页 → 先自动切项目，再高亮定位文章
-//  8) 已收藏页顶部显示“已收藏”，未收藏页才显示“收藏”操作
+//  8) 已添加页顶部显示“已添加”，未添加页才显示“添加”操作
 // 运行：NODE_PATH=<jsdom 路径> node tests/panel-locate-current.test.js
 const fs = require("fs");
 const path = require("path");
@@ -148,6 +148,7 @@ function boot({ store, dropSmooth = false, activeTab: initialTab = null, stickyB
   window.eval(i18nSource);
   window.eval(urlSource);
   window.eval(tabNavigationSource);
+  require('./helpers/item-mutation')(window);
   window.eval(sidepanelSource);
 
   return {
@@ -287,12 +288,47 @@ function bigStore(currentIndex, overrides = {}) {
     !envG.document.querySelector('.item[data-id="work-1"]') && envG.isHighlighted("read-1"));
   check("目标文章定位在可视区域", envG.inView("read-1") === true, String(envG.inView("read-1")));
   const saveButton = envG.document.querySelector("#saveCurrent");
-  check("已保存页面顶部明确显示“已保存”", saveButton.disabled && saveButton.classList.contains("saved")
-    && saveButton.querySelector(".save-label").textContent === "已保存", saveButton.textContent.trim());
+  check("已添加页面顶部明确显示“已添加”", saveButton.disabled && saveButton.classList.contains("saved")
+    && saveButton.querySelector(".save-label").textContent === "已添加", saveButton.textContent.trim());
   envG.switchTab({ id: 3, url: "https://example.com/new", title: "还没收藏的文章" });
   await tick(300);
-  check("未收藏页面恢复为可点击的“收藏”按钮", !saveButton.disabled && !saveButton.classList.contains("saved")
-    && saveButton.querySelector(".save-label").textContent === "收藏", saveButton.textContent.trim());
+  check("未添加页面恢复为可点击的“添加”按钮", !saveButton.disabled && !saveButton.classList.contains("saved")
+    && saveButton.querySelector(".save-label").textContent === "添加", saveButton.textContent.trim());
+
+  // 阅读状态写入存储时，当前网页还可能是等待整理中的旧网页。
+  // 用户已选择工作项目；数据刷新不能拿旧网页把项目切回等待整理。
+  const envRace = boot({
+    store: {
+      laterOnItems: [
+        makeItem({ id: "inbox-old", url: "https://example.com/inbox" }),
+        makeItem({ id: "work-new", projectId: "work", url: "https://example.com/work-new" })
+      ],
+      laterOnProjects: [{ id: "work", name: "工作" }],
+      laterOnActiveProject: "unfiled", laterOnSettings: {}, laterOnCovers: {}
+    },
+    activeTab: { id: 10, windowId: 7, active: true, url: "https://example.com/inbox" }
+  });
+  await tick(250);
+  [...envRace.document.querySelectorAll('.project-filter')].find(button => button.querySelector('.project-name')?.textContent === '工作').click();
+  await tick(50);
+  await envRace.window.chrome.storage.local.set({
+    laterOnItems: envRace.store.laterOnItems.map(item => item.id === "work-new" ? { ...item, status: "reading" } : item)
+  });
+  await tick(100);
+  check("阅读状态刷新不会按旧网页把所选项目切回等待整理", envRace.store.laterOnActiveProject === "work", envRace.store.laterOnActiveProject);
+  let finishMetadata;
+  envRace.window.chrome.runtime.sendMessage = () => new Promise(resolve => { finishMetadata = resolve; });
+  envRace.switchTab({ id: 10, url: "https://example.com/inbox" });
+  await tick(50);
+  [...envRace.document.querySelectorAll('.project-filter')].find(button => button.querySelector('.project-name')?.textContent === '工作').click();
+  await tick(50);
+  finishMetadata({ ok: true, metadata: { title: "旧网页迟到的资料" } });
+  await tick(100);
+  check("迟到的网页资料不会切回等待整理", envRace.store.laterOnActiveProject === "work", envRace.store.laterOnActiveProject);
+  envRace.window.chrome.runtime.sendMessage = () => Promise.resolve({ ok: false });
+  envRace.switchTab({ id: 11, url: "https://example.com/work-new" });
+  await tick(150);
+  check("真正切换标签后仍能定位项目内网页", envRace.store.laterOnActiveProject === "work" && envRace.isHighlighted("work-new"));
 
   // ═══ ⑧ 侧栏拖宽 / 顶部栏变高后仍然不会遮住卡片 ═══
   console.log("\n── ⑧ 顶部吸顶区变高 → 按实际可见区域重新居中 ──");

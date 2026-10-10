@@ -145,6 +145,7 @@ window.eval(i18nSource);
 window.eval(dialogSource);
 window.eval(urlSource);
 window.eval(tabNavigationSource);
+require('./helpers/item-mutation')(window);
 window.eval(librarySource);
 
 const boardGrid = () => document.querySelector("#boardGrid");
@@ -290,7 +291,7 @@ const text = (el, selector) => el?.querySelector(selector)?.textContent || "";
   console.log("\n── 顶部筛选照样生效 ──");
   click(document.querySelector('.nav-item[data-filter="done"]'));
   await tick(30);
-  check("只看已读时，工作类目只剩 1 篇", text(boardOf("work"), ".board-meta") === "1 篇 · 都读完了", text(boardOf("work"), ".board-meta"));
+  check("项目图板统计仍显示项目全量，阅读筛选不改项目概况", text(boardOf("work"), ".board-meta") === "4 篇 · 3 没看完", text(boardOf("work"), ".board-meta"));
   check("当前筛选下没有内容的类目也不显示", !boardOf("read"));
   click(document.querySelector('.nav-item[data-filter="all"]'));
   await tick(30);

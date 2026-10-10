@@ -92,6 +92,7 @@ function mount(html, source, url) {
   dom.window.chrome = makeChrome(dom.window);
   dom.window.scrollTo = () => {};
   ensureUuid(dom.window);
+  require('./helpers/item-mutation')(dom.window);
   dom.window.eval(source);
   return dom.window;
 }

@@ -33,23 +33,23 @@
     const language = data.language === "en" || (!data.language && document.documentElement.lang === "en") ? "en" : "zh-CN";
     const copy = language === "en" ? {
       projects: "Choose a project", newProject: "New project name", cancel: "Cancel", moveTitle: "Move this save to which project?",
-      saveTitle: "Save to which project?", saveSingleTitle: "Save this page to which project?",
-      singleSaved: "This page is already saved — confirming will move it to the selected project", singleNew: "Choose a project to save this page",
-      batchSaved: (total, saved) => `${total} tabs, including ${saved} already saved — confirming will move them to the selected project`,
-      batchNew: (total) => `${total} tabs — choose a project to start saving them one by one`, pages: (n) => `View the ${n} pages to be saved`,
-      newMove: "Type a new project name and press Enter to move", newSave: "Type a new project name and press Enter to save", inbox: "Inbox",
-      processing: "Working…", createMove: (name) => `Create “${name}” and move`, createSave: (name) => `Create “${name}” and save`,
-      moveTo: (name) => `Move to “${name}”`, saveTo: (name) => `Save to “${name}”`, createFailed: "Couldn’t create the project. Try again.",
+      saveTitle: "Add to which project?", saveSingleTitle: "Add this page to which project?",
+      singleSaved: "This page is already added — confirming will move it to the selected project", singleNew: "Choose a project to add this page",
+      batchSaved: (total, saved) => `${total} tabs, including ${saved} already added — confirming will move them to the selected project`,
+      batchNew: (total) => `${total} tabs — choose a project to start adding them one by one`, pages: (n) => `View the ${n} pages to be added`,
+      newMove: "Type a new project name and press Enter to move", newSave: "Type a new project name and press Enter to add", inbox: "Inbox",
+      processing: "Working…", createMove: (name) => `Create “${name}” and move`, createSave: (name) => `Create “${name}” and add`,
+      moveTo: (name) => `Move to “${name}”`, saveTo: (name) => `Add to “${name}”`, createFailed: "Couldn’t create the project. Try again.",
       failed: "Something went wrong. Try again."
     } : {
       projects: "选择项目", newProject: "新建项目名称", cancel: "取消", moveTitle: "把这篇放到哪个项目？",
-      saveTitle: "保存到哪个项目？", saveSingleTitle: "把这个网页保存到哪个项目？",
-      singleSaved: "这个网页已经保存过——确认后会一并移进你选的项目", singleNew: "选好项目后就会保存这个网页",
-      batchSaved: (total, saved) => `共 ${total} 个标签页，其中 ${saved} 个已经保存过——确认后会一并移进你选的项目`,
-      batchNew: (total) => `共 ${total} 个标签页，选好项目后就会开始逐个保存`, pages: (n) => `查看将要保存的 ${n} 个网页`,
-      newMove: "输入新项目名，回车直接移入", newSave: "输入新项目名，回车直接保存进去", inbox: "等待整理",
-      processing: "正在处理…", createMove: (name) => `新建「${name}」并移入`, createSave: (name) => `新建「${name}」并保存`,
-      moveTo: (name) => `移动到「${name}」`, saveTo: (name) => `保存到「${name}」`, createFailed: "新建项目失败，请重试。",
+      saveTitle: "添加到哪个项目？", saveSingleTitle: "把这个网页添加到哪个项目？",
+      singleSaved: "这个网页已经添加过——确认后会一并移进你选的项目", singleNew: "选好项目后就会添加这个网页",
+      batchSaved: (total, saved) => `共 ${total} 个标签页，其中 ${saved} 个已经添加过——确认后会一并移进你选的项目`,
+      batchNew: (total) => `共 ${total} 个标签页，选好项目后就会开始逐个添加`, pages: (n) => `查看将要添加的 ${n} 个网页`,
+      newMove: "输入新项目名，回车直接移入", newSave: "输入新项目名，回车直接添加进去", inbox: "等待整理",
+      processing: "正在处理…", createMove: (name) => `新建「${name}」并移入`, createSave: (name) => `新建「${name}」并添加`,
+      moveTo: (name) => `移动到「${name}」`, saveTo: (name) => `添加到「${name}」`, createFailed: "新建项目失败，请重试。",
       failed: "操作失败，请重试。"
     };
 

@@ -80,10 +80,12 @@ const toast = document.querySelector("#toast");
 const tr = (key, vars) => {
   if (window.LaterOnI18n?.t) return window.LaterOnI18n.t(key, vars);
   const fallback = {
+    deleteProject: "删除项目", deleteProjectTitle: "删除项目「{name}」？", deleteProjectItems: "项目及其中的 {n} 篇网页将一起删除，删除后无法恢复。", deleteEmptyProject: "这个项目里还没有网页，删除后无法恢复。", projectDeletedWithItems: "已删除项目「{name}」及其中的 {n} 篇网页", projectDeleted: "已删除项目「{name}」",
+    archive: "归档", archiveProject: "归档项目", restoreProject: "恢复项目", projectArchived: "项目及内容已归档，可在归档中恢复", projectRestored: "项目及内容已恢复",
     noInbox: "还没有要整理的", searchCount: "在全部网页里找到 {count} 篇 · {unfinished} 篇没看完",
     scopedCount: "{count} 篇网页 · {unfinished} 篇没看完", noMatches: "没有找到匹配的网页",
     noMatchesHint: "换个关键词，或切换顶部的阅读状态筛选。", quiet: "这里还很安静",
-    quietHint: "打开一个有价值的网页，点击浏览器工具栏中的 LaterOn 图标即可保存。",
+    quietHint: "打开一个有价值的网页，点击浏览器工具栏中的 LaterOn 图标即可添加。",
     noBoard: "没有匹配的类目", noBoardHint: "换个关键词，或切换顶部的阅读状态筛选。",
     boardCount: "{groups} 个项目 · 共 {total} 篇网页 · {unfinished} 篇没看完", notFinished: "没看完",
     slogan: "有价值的网页，留给 LaterOn。", inbox: "等待整理", allProjectsOverview: "全部项目",
@@ -102,12 +104,18 @@ const tr = (key, vars) => {
   return String(fallback[key] || key).replace(/\{(\w+)\}/g, (_, k) => vars?.[k] ?? `{${k}}`);
 };
 
+function itemIsArchived(item) {
+  return projects.some((project) => project.id === item.projectId && project.archived);
+}
+
 function syncDocumentTitle() {
   let pageName = "";
   if (pageTitleMode === "home") {
     pageName = tr("slogan");
   } else if (activeProject === "unfiled") {
     pageName = tr("inbox");
+  } else if (activeProject === "archive") {
+    pageName = tr("archive");
   } else if (activeProject === "all") {
     pageName = tr("allProjectsOverview");
   } else {
@@ -177,17 +185,14 @@ async function migrateLegacyCovers(rawItems) {
 
 // 用户上传的封面增删后，把 COVERS_KEY 整体写回存储。
 async function saveCovers(next) {
-  covers = next;
-  try { await chrome.storage.local.set({ [COVERS_KEY]: covers }); } catch { /* 写不进去时本地照样显示 */ }
-}
-
-// 删除收藏时，把它自己上传的封面也一并删掉。
-async function removeCoversOf(ids) {
-  const doomed = [...ids].filter((id) => covers[id]);
-  if (!doomed.length) return;
-  const next = { ...covers };
-  for (const id of doomed) delete next[id];
-  await saveCovers(next);
+  try {
+    await chrome.storage.local.set({ [COVERS_KEY]: next });
+    covers = next;
+    return true;
+  } catch {
+    showToast(tr("operationFailed"));
+    return false;
+  }
 }
 
 // 三档：未读 / 在读 / 已读（已完成）。点一下「标为已读」按钮 = 标记完成，再点取消；
@@ -333,6 +338,8 @@ document.querySelectorAll(".project-nav").forEach((button) => {
   button.addEventListener("click", () => selectProject(button.dataset.project));
   enableDropTarget(button);
 });
+
+document.querySelector("#openArchive")?.addEventListener("click", () => selectProject("archive"));
 
 const projectsSection = document.querySelector(".projects-section");
 
@@ -882,9 +889,11 @@ function renderCardsView() {
   // （以前是在当前项目的范围里找，人在某个项目里搜一个明明存在的标题会一无所获，
   //   还以为这篇收藏丢了。）「未读 / 已读」那一档仍然生效——它是用户自己拨过去的开关，
   // 不该被搜索悄悄改掉；没结果时的提示里也说了可以切它。
-  const scopedItems = query
-    ? items
-    : items.filter((item) => activeProject === "all" || (activeProject === "unfiled" ? !item.projectId : item.projectId === activeProject));
+  const scopedItems = items.filter((item) => {
+    if (activeProject === "archive") return itemIsArchived(item);
+    if (itemIsArchived(item) && activeProject !== item.projectId) return false;
+    return !!query || activeProject === "all" || (activeProject === "unfiled" ? !item.projectId : item.projectId === activeProject);
+  });
   let visible = scopedItems.filter((item) => {
     // 「未读」= 还没读完（未读 + 在读）；「已读」= 手动标完成的那批。
     // 这样点开文章（自动进「在读」）不会让它从「未读」里消失——没读完就还算没读。
@@ -926,7 +935,7 @@ function renderCardsView() {
 // 搜索时也让位给卡片列表：搜索要找的是「文章」，不是「类目」——所以只要搜索框里有字，
 // 即便是「全部项目」也直接铺出命中的卡片（见 renderCardsView 里的全局搜索）。
 function isBoardView() {
-  return activeProject === "all" && !query;
+  return (activeProject === "all" || activeProject === "archive") && !query;
 }
 
 // 哪些控件在当前视图下该出现：排序和批量选择只对卡片列表有意义，
@@ -951,7 +960,7 @@ function matchesReadFilter(item) {
 // 那些收藏在「全部项目」的卡片视图里照样看得到，只是不再单独成一类。
 // 顶部「未读 / 已读」筛选照样生效——只影响每组里算进来的篇数和封面。
 function boardGroups() {
-  const groups = projects.map((project) => ({
+  const groups = projects.filter((project) => !!project.archived === (activeProject === "archive")).map((project) => ({
     id: project.id,
     name: project.name,
     note: project.note || "",
@@ -975,7 +984,7 @@ function boardGroups() {
   // 返回首页后必须找得到。只有“本来有内容、但当前阅读筛选下一篇都不剩”的项目才隐藏。
   // 注意：搜索时根本不会走到这里——有搜索词时视图直接切到卡片列表（见 isBoardView），
   // 因为搜索要找的是「文章」，按类目名去筛图板是另一回事。
-  return ordered.filter((group) => group.items.length > 0 || group.own.length === 0);
+  return ordered.filter((group) => activeProject === "archive" || group.items.length > 0 || group.own.length === 0);
 }
 
 function renderBoards() {
@@ -995,7 +1004,7 @@ function renderBoards() {
 
   boardGrid.replaceChildren();
   for (const group of groups) boardGrid.append(createBoardCard(group));
-  boardGrid.append(createProjectBoard());
+  if (activeProject !== "archive") boardGrid.append(createProjectBoard());
 
   empty.hidden = groups.length > 0;
   if (!groups.length && items.length) {
@@ -1032,7 +1041,7 @@ function createBoardCard(group) {
   card.dataset.project = group.id;
   // 整块图板可拖：拖它就能换这个类目在图板墙上的位置（和拖卡片同一套逻辑）。
   // 右上角那个改简介的铅笔是按钮，按下时不会触发拖拽。
-  card.draggable = true;
+  card.draggable = activeProject !== "archive";
   if (group.cover) {
     // 用户给这个类目设了自定义封面：整块铺满，不再拼多篇。
     cover.append(createBoardCellFromSrc(group.cover));
@@ -1073,7 +1082,7 @@ function boardCoverItems(group) {
     .map((id) => (group.own || group.items).find((item) => item.id === id))
     .filter((item) => item && resolveImage(item));
   if (picked.length) return picked.slice(0, 3);
-  const sorted = [...group.items].sort((a, b) => b.savedAt - a.savedAt);
+  const sorted = [...(group.own || group.items)].sort((a, b) => b.savedAt - a.savedAt);
   const withCover = sorted.filter((item) => resolveImage(item));
   const withoutCover = sorted.filter((item) => !resolveImage(item));
   return [...withCover, ...withoutCover].slice(0, 3);
@@ -1119,7 +1128,7 @@ function createBoardCellFromSrc(src) {
 function boardNote(group) {
   const written = (group.note || "").trim();
   if (written) return { text: written, auto: false };
-  const list = group.items;
+  const list = group.own || group.items;
   if (!list.length) return { text: tr("emptyBoardNote"), auto: true };
   const counts = new Map();
   for (const item of list) {
@@ -1138,9 +1147,10 @@ function boardNote(group) {
 }
 
 function boardMeta(group) {
-  const count = group.items.length;
+  const list = group.own || group.items;
+  const count = list.length;
   if (!count) return tr("emptyCollection");
-  const unread = group.items.filter((item) => item.status !== "done").length;
+  const unread = list.filter((item) => item.status !== "done").length;
   const english = document.documentElement.lang === "en";
   return unread ? (english ? `${count} saves · ${unread} ${tr("notFinished")}` : `${count} 篇 · ${unread} ${tr("notFinished")}`)
     : (english ? `${count} saves · ${tr("allRead")}` : `${count} 篇 · ${tr("allRead")}`);
@@ -1420,7 +1430,7 @@ function createCard(item) {
 function fillProjectSelect(select, ensureId, ensureName) {
   select.replaceChildren();
   select.append(new Option(tr("inbox"), ""));
-  projects.forEach((project) => select.append(new Option(project.name, project.id)));
+  projects.filter((project) => !project.archived).forEach((project) => select.append(new Option(project.name, project.id)));
   if (ensureId && !projects.some((project) => project.id === ensureId)) {
     select.append(new Option(ensureName || tr("newProject"), ensureId));
   }
@@ -1506,19 +1516,19 @@ async function editItem(item) {
   const originalCover = resolveImage(item);
   if (typeof values.cover === "string" && values.cover !== originalCover) {
     if (values.cover) {
-      await saveCovers({ ...covers, [item.id]: values.cover });
+      if (!await saveCovers({ ...covers, [item.id]: values.cover })) return;
       patch.image = `local://${item.id}`;
     } else {
       const nextCovers = { ...covers };
       delete nextCovers[item.id];
-      await saveCovers(nextCovers);
+      if (!await saveCovers(nextCovers)) return;
       patch.image = "";
     }
     // 记一笔：这是用户自己定的封面，之后再收藏同一网址时别用自动抓取的把它盖掉。
     patch.imageEdited = true;
   }
   if (!Object.keys(patch).length) { showToast(tr("noChanges")); return; }
-  await updateItem(item.id, patch);
+  if (!await updateItem(item.id, patch)) return;
   // 立刻重画一次：存储的变更广播不一定会回到自己这个页面，靠它会显得「改了没反应」。
   render();
   showToast(tr("changesSaved"));
@@ -1534,7 +1544,7 @@ function selectProject(projectId, { asHome = false } = {}) {
 }
 
 function normalizeProject(projectId) {
-  if (projectId === "all" || projectId === "unfiled") return projectId;
+  if (projectId === "archive" || projectId === "all" || projectId === "unfiled") return projectId;
   return projects.some((project) => project.id === projectId) ? projectId : "all";
 }
 
@@ -1588,7 +1598,8 @@ function renderProjects() {
     if (item.projectId) counts.set(item.projectId, (counts.get(item.projectId) || 0) + 1);
     else unfiled += 1;
   }
-  document.querySelector("#allCount").textContent = items.length;
+  document.querySelector("#allCount").textContent = items.filter((item) => !itemIsArchived(item)).length;
+  document.querySelector("#openArchive")?.classList.toggle("active", activeProject === "archive");
   document.querySelector("#unfiledCount").textContent = unfiled;
   syncProjectsVisibility();
   // 「待整理」那块：有内容就高亮，并把提示写成一句要去办的事。
@@ -1613,7 +1624,7 @@ function renderProjects() {
   divider.setAttribute("role", "separator");
   divider.setAttribute("aria-label", tr("pinnedProjects"));
 
-  projects.forEach((project, index) => {
+  projects.filter((project) => !project.archived).forEach((project, index) => {
     const row = document.createElement("div");
     row.className = "project-row";
     row.dataset.id = project.id;
@@ -1718,7 +1729,7 @@ function refreshCardProjectOptions() {
     if (!select) continue;
     const current = select.value;
     select.replaceChildren(new Option(tr("inbox"), ""));
-    projects.forEach((project) => select.append(new Option(project.name, project.id)));
+    projects.filter((project) => !project.archived).forEach((project) => select.append(new Option(project.name, project.id)));
     if (select.value !== current) select.value = current;
   }
 }
@@ -1745,7 +1756,7 @@ function enableDropTarget(target) {
     const projectName = projectId ? projects.find((project) => project.id === projectId)?.name : tr("inbox");
     clearDropHighlights();
     if (!itemId || !items.some((item) => item.id === itemId)) return;
-    await updateItem(itemId, { projectId });
+    if (!await updateItem(itemId, { projectId })) return;
     showToast(tr("movedIntoProject", { name: projectName || tr("genericProject") }));
   });
 }
@@ -1986,6 +1997,17 @@ async function commitRename(id, input) {
   showToast(tr("renamedTo", { name }));
 }
 
+async function toggleProjectArchive(id) {
+  const project = projects.find((entry) => entry.id === id);
+  if (!project) return;
+  const archived = !project.archived;
+  const next = projects.map((entry) => entry.id === id ? { ...entry, archived } : entry);
+  await chrome.storage.local.set({ [PROJECTS_KEY]: next });
+  projects = next;
+  selectProject(archived ? "archive" : id);
+  showToast(tr(archived ? "projectArchived" : "projectRestored"));
+}
+
 async function deleteProject(id) {
   const project = projects.find((entry) => entry.id === id);
   if (!project) return;
@@ -1994,24 +2016,28 @@ async function deleteProject(id) {
     tone: "danger",
     title: tr("deleteProjectTitle", { name: project.name }),
     message: affected
-      ? tr("deleteProjectMoveItems", { n: affected })
+      ? tr("deleteProjectItems", { n: affected })
       : tr("deleteEmptyProject"),
     confirmText: tr("deleteProject")
   });
   if (!confirmed) return;
   projects = projects.filter((entry) => entry.id !== id);
-  await chrome.storage.local.set({ [PROJECTS_KEY]: projects });
-  if (affected) {
-    items = items.map((item) => item.projectId === id ? { ...item, projectId: null } : item);
-    await chrome.storage.local.set({ [STORAGE_KEY]: items });
-  }
+  const deletedIds = new Set(items.filter((item) => item.projectId === id).map((item) => item.id));
+  items = items.filter((item) => !deletedIds.has(item.id));
+  covers = Object.fromEntries(Object.entries(covers).filter(([itemId]) => !deletedIds.has(itemId)));
+  orders = Object.fromEntries(Object.entries(orders)
+    .filter(([scope]) => scope !== id)
+    .map(([scope, ids]) => [scope, ids.filter((itemId) => !deletedIds.has(itemId))]));
+  const patch = { [PROJECTS_KEY]: projects, [STORAGE_KEY]: items, [COVERS_KEY]: covers, [ORDER_KEY]: orders };
+  if (deletedIds.has(currentItemId)) patch[CURRENT_ITEM_KEY] = null;
+  await chrome.storage.local.set(patch);
   if (activeProject === id) {
     activeProject = "all";
     await chrome.storage.local.set({ [ACTIVE_PROJECT_KEY]: "all" });
   }
   renderProjects();
   render();
-  showToast(tr(affected ? "projectDeletedMoved" : "projectDeleted", { name: project.name, n: affected }));
+  showToast(tr(affected ? "projectDeletedWithItems" : "projectDeleted", { name: project.name, n: affected }));
 }
 
 function openFolderMenu(projectId, x, y) {
@@ -2032,6 +2058,7 @@ function openFolderMenu(projectId, x, y) {
     menuItem(project.pinned ? tr("unpinProject") : tr("pinProject"), project.pinned ? "unpin" : "pin", () => toggleProjectPin(projectId)),
     menuItem(tr("rename"), "pencil", () => startRename(projectId, project.name)),
     menuItem(tr("editNote"), "note", () => editBoard(projectId)),
+    menuItem(tr(project.archived ? "restoreProject" : "archiveProject"), "archive", () => toggleProjectArchive(projectId)),
     menuItem(tr("deleteProject"), "trash", () => deleteProject(projectId), true)
   );
   document.body.append(menu);
@@ -2111,6 +2138,7 @@ function menuItem(label, icon, onPick, danger = false) {
   const ICON_PATHS = {
     pencil: "M4 20h4L20 8l-4-4L4 16zM14 6l4 4",
     note: "M6 3h8l4 4v14H6zM14 3v4h4M9 12h6M9 16h4",
+    archive: "M3 4h18v4H3zM5 8v12h14V8M9 12h6",
     trash: "M4 7h16m-10 4v6m4-6v6M9 7l1-3h4l1 3m3 0-1 13H7L6 7",
     // 下面几个是「单篇收藏菜单」用的：
     open: "M14 5h5v5M19 5l-8 8M17 13v5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1h5",
@@ -2235,19 +2263,23 @@ async function waitForSidePanelReady(windowId) {
   return false;
 }
 
-async function updateItem(id, patch) {
-  const next = { ...patch };
-  if (patch.status) {
-    next.read = patch.status === "done";  // 同步 read，兼容旧字段
-    // 记下「什么时候标成已读的」——自动清除从这个时刻起算。
-    // 本来就已读的（比如改标题时不小心又传了一次 status）保留原时间，别把计时器重置。
-    const current = items.find((item) => item.id === id);
-    next.doneAt = patch.status === "done"
-      ? (current?.status === "done" && Number(current.doneAt) ? current.doneAt : Date.now())
-      : null;
+async function commitItemMutation(operation, ids, patch) {
+  try {
+    const response = await chrome.runtime.sendMessage({ type: "MUTATE_ITEMS", operation, ids: [...ids], patch });
+    if (!response?.ok || !Array.isArray(response.items)) throw new Error(response?.error || "Item write failed");
+    items = normalizeItems(response.items);
+    covers = response.covers || {};
+    render();
+    renderProjects();
+    return response;
+  } catch {
+    showToast(tr("operationFailed"));
+    return null;
   }
-  items = items.map((item) => item.id === id ? { ...item, ...next } : item);
-  await chrome.storage.local.set({ [STORAGE_KEY]: items });
+}
+
+async function updateItem(id, patch) {
+  return !!(await commitItemMutation("update", [id], patch));
 }
 
 // 卡片上点「所属项目」弹出的浮层：锚定在那个 <select> 按钮旁边。
@@ -2263,7 +2295,7 @@ function projectPickerFolders() {
   // 每行左侧的封面缩略图用 projectCoverFor —— 和侧栏项目行是同一份逻辑，两处永远一致。
   return [
     { id: "", name: tr("inbox"), count: unfiled, cover: projectCoverFor("") },
-    ...projects.map((project) => ({ id: project.id, name: project.name, count: counts.get(project.id) || 0, cover: projectCoverFor(project.id) }))
+    ...projects.filter((project) => !project.archived).map((project) => ({ id: project.id, name: project.name, count: counts.get(project.id) || 0, cover: projectCoverFor(project.id) }))
   ];
 }
 
@@ -2289,7 +2321,7 @@ function openCardProjectPicker(card, item, select) {
       if (![...select.options].some((option) => option.value === projectId)) {
         fillProjectSelect(select, projectId, name);
       }
-      await updateItem(item.id, { projectId });
+      if (!await updateItem(item.id, { projectId })) return;
       const latest = items.find((entry) => entry.id === item.id);
       clearSearch();
       updateCard(card, latest);
@@ -2312,9 +2344,8 @@ async function deleteItem(id) {
     confirmText: tr("delete")
   });
   if (!confirmed) return;
-  items = items.filter((item) => item.id !== id);
-  await chrome.storage.local.set({ [STORAGE_KEY]: items });
-  showToast(tr("itemDeleted"));
+  const result = await commitItemMutation("delete", [id]);
+  if (result) showToast(tr("itemDeleted"));
 }
 
 // ── 批量操作 ─────────────────────────────────────────────
@@ -2340,11 +2371,12 @@ function setSelectMode(on) {
 }
 
 // 多选期间点击卡片以外的页面操作区，视为用户要离开多选；
-// 卡片本身、底部批量工具栏和“选择”按钮保留原有交互。
+// 卡片本身、底部批量工具栏、“选择”按钮、项目浮层和确认弹窗保留原有交互。
 document.addEventListener("pointerdown", (event) => {
   if (!selectMode) return;
   const target = event.target;
-  if (target?.closest?.(".card, #bulkBar, #selectMode")) return;
+  // Shadow DOM 内的点击会重定向到浮层宿主，选项目和确认时不能清空选择。
+  if (target?.closest?.(".card, #bulkBar, #selectMode, #lateron-folder-picker, .lod-root")) return;
   setSelectMode(false);
 }, true);
 
@@ -2367,14 +2399,14 @@ function updateSelectionUI() {
 
 async function bulkUpdate(patch) {
   if (!selectedIds.size) return;
-  for (const id of selectedIds) await updateItem(id, patch);
-  finishBulk();
+  if (await commitItemMutation("update", new Set(selectedIds), patch)) finishBulk();
 }
 
 async function bulkMove(projectId) {
   if (!selectedIds.size) return;
-  for (const id of selectedIds) await updateItem(id, { projectId });
-  finishBulk();
+  const result = await commitItemMutation("update", new Set(selectedIds), { projectId });
+  if (result) finishBulk();
+  return result;
 }
 
 function openBulkProjectPicker() {
@@ -2394,15 +2426,18 @@ function openBulkProjectPicker() {
     titleText: tr("bulkMoveTitle", { n: count }),
     onCreateProject: createProjectFromPicker,
     onPick: async (projectId, name) => {
-      await bulkMove(projectId || null);
-      showToast(tr("bulkMoved", { n: count, name: name || tr("inbox") }));
+      const result = await bulkMove(projectId || null);
+      if (!result) return;
+      showToast(tr("bulkMoved", { n: result.affected, name: name || tr("inbox") }));
     }
   });
 }
 
 async function bulkDelete() {
   if (!selectedIds.size) return;
-  const count = selectedIds.size;
+  // 固定确认框所对应的网页，确认期间的选择变化不能改写删除目标。
+  const ids = new Set(selectedIds);
+  const count = ids.size;
   const confirmed = await LaterOnDialog.confirm({
     tone: "danger",
     title: tr("bulkDeleteTitle", { n: count }),
@@ -2410,12 +2445,10 @@ async function bulkDelete() {
     confirmText: tr("bulkDeleteButton", { n: count })
   });
   if (!confirmed) return;
-  const ids = new Set(selectedIds);
-  items = items.filter((item) => !ids.has(item.id));
-  await chrome.storage.local.set({ [STORAGE_KEY]: items });
-  await removeCoversOf(ids);
+  const result = await commitItemMutation("delete", ids);
+  if (!result) return;
   finishBulk();
-  showToast(tr("bulkDeleted", { n: ids.size }));
+  showToast(tr("bulkDeleted", { n: result.affected }));
 }
 
 function selectedItemsInViewOrder() {

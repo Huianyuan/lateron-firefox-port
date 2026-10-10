@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "__MSG_extensionName__",
-  "version": "1.65.0",
+  "version": "1.66.0",
   "default_locale": "zh_CN",
   "minimum_chrome_version": "121",
   "description": "__MSG_extensionDescription__",
@@ -66,8 +66,13 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["icon128.png"],
-      "matches": ["http://*/*", "https://*/*"]
+      "resources": [
+        "icon128.png"
+      ],
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ]
     }
   ]
 }

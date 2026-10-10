@@ -96,6 +96,7 @@
             <div id="projectList" class="project-list"></div>
           </div>
           <div class="sidebar-footer">
+            <button id="openArchive" class="sidebar-setting" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18v4H3zM5 8v12h14V8M9 12h6"/></svg><span data-i18n="archive">归档</span></button>
             <button id="openSettings" class="sidebar-setting" type="button" title="设置" aria-label="设置">
               <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
               <span data-i18n="settings">设置</span>
@@ -113,8 +114,8 @@
           <div class="collection-right">
             <!-- 全部项目固定是图板视图，待整理 / 单个项目是卡片视图，不再需要手动切换 -->
             <select id="sortSelect" data-i18n-aria-label="sortAria" aria-label="排序方式">
-              <option value="newest" data-i18n="sortNewest">最近保存</option>
-              <option value="oldest" data-i18n="sortOldest">最早保存</option>
+              <option value="newest" data-i18n="sortNewest">最近添加</option>
+              <option value="oldest" data-i18n="sortOldest">最早添加</option>
               <option value="source" data-i18n="sortSource">按来源</option>
               <option value="custom" data-i18n="sortCustom">自定义顺序</option>
             </select>
@@ -124,7 +125,7 @@
         <section id="emptyState" class="empty" hidden>
           <img class="empty-icon" src="icon128.png" alt="" />
           <h2 data-i18n="quiet">这里还很安静</h2>
-          <p data-i18n="quietHint">打开一个有价值的网页，点击浏览器工具栏中的 LaterOn 图标即可保存。</p>
+          <p data-i18n="quietHint">打开一个有价值的网页，点击浏览器工具栏中的 LaterOn 图标即可添加。</p>
         </section>
         <section id="cardGrid" class="grid" aria-live="polite"></section>
         <section id="boardGrid" class="board-grid" aria-live="polite" hidden></section>

@@ -117,6 +117,7 @@ async function search(word) {
 }
 
 (async () => {
+  require('./helpers/item-mutation')(window);
   window.eval(librarySource);
   await tick(60);
 

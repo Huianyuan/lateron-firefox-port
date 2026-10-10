@@ -5,6 +5,55 @@ const STORAGE_KEY = "laterOnItems";
 const PROJECTS_KEY = "laterOnProjects";
 const SETTINGS_KEY = "laterOnSettings";
 const CURRENT_ITEM_KEY = "laterOnCurrentItem";
+// 后台保存只串行化读改写这一小段；网页抓取和提示不占用队列。
+// 每次提交都读取最新列表，避免批量抓取期间的单篇保存被旧快照覆盖。
+let itemWriteQueue = Promise.resolve();
+function queueItemWrite(task) {
+  const pending = itemWriteQueue.then(task);
+  itemWriteQueue = pending.catch(() => {});
+  return pending;
+}
+// 网页修改与删除共用添加/自动清理的队列，始终从最新存储按 id 修改。
+async function mutateItems({ operation, ids, patch = {} }) {
+  if (!["delete", "update"].includes(operation) || !Array.isArray(ids) || ids.some(id => typeof id !== "string")) {
+    throw new Error("Invalid item mutation");
+  }
+  return queueItemWrite(async () => {
+    const stored = await chrome.storage.local.get([STORAGE_KEY, COVERS_KEY, ORDER_KEY, CURRENT_ITEM_KEY]);
+    const original = stored[STORAGE_KEY] || [];
+    const targets = new Set(ids);
+    let affected = 0;
+    const nextItems = operation === "delete"
+      ? original.filter(item => { if (!targets.has(item.id)) return true; affected++; return false; })
+      : original.map(item => {
+        if (!targets.has(item.id)) return item;
+        affected++;
+        const next = { ...patch };
+        delete next.id;
+        if (next.status) {
+          next.read = next.status === "done";
+          next.doneAt = next.status === "done"
+            ? (item.status === "done" && Number(item.doneAt) ? item.doneAt : Date.now())
+            : null;
+        }
+        return { ...item, ...next };
+      });
+    const nextCovers = { ...(stored[COVERS_KEY] || {}) };
+    const write = { [STORAGE_KEY]: nextItems };
+    if (operation === "delete") {
+      for (const id of targets) delete nextCovers[id];
+      write[COVERS_KEY] = nextCovers;
+      write[ORDER_KEY] = Object.fromEntries(Object.entries(stored[ORDER_KEY] || {}).map(
+        ([scope, list]) => [scope, Array.isArray(list) ? list.filter(id => !targets.has(id)) : list]
+      ));
+      if (targets.has(stored[CURRENT_ITEM_KEY])) write[CURRENT_ITEM_KEY] = null;
+    }
+    // 一次提交网页、封面、顺序及当前阅读标记；失败时不返回成功结果。
+    await chrome.storage.local.set(write);
+    return { ok: true, items: nextItems, covers: nextCovers, affected };
+  });
+}
+
 async function usesEnglish() {
   try { return (await chrome.storage.local.get(SETTINGS_KEY))[SETTINGS_KEY]?.language === "en"; }
   catch { return false; }
@@ -79,7 +128,7 @@ function omniboxMatches(items, projects, text) {
   const words = String(text || "").trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
   const projectNames = new Map((projects || []).map((project) => [project.id, project.name]));
   return (items || [])
-    .filter((item) => isWebUrl(item.url))
+    .filter((item) => isWebUrl(item.url) && !(projects || []).some((project) => project.id === item.projectId && project.archived))
     .map((item) => {
       const title = String(item.title || item.url || "");
       const project = projectNames.get(item.projectId) || "";
@@ -184,8 +233,8 @@ function setupContextMenus() {
     const stored = await chrome.storage.local.get(SETTINGS_KEY).catch(() => ({}));
     const language = stored[SETTINGS_KEY]?.language === "en" ? "en" : "zh-CN";
     const titles = language === "en"
-      ? { page: "Save this page to LaterOn", all: "Save all tabs in this window to LaterOn" }
-      : { page: "保存此页面到 LaterOn", all: "保存本窗口所有标签页到 LaterOn" };
+      ? { page: "Add this page to LaterOn", all: "Add all tabs in this window to LaterOn" }
+      : { page: "添加此页面到 LaterOn", all: "添加本窗口所有标签页到 LaterOn" };
     await new Promise((resolve) => {
       try {
         chrome.contextMenus.removeAll(() => {
@@ -260,6 +309,10 @@ function isDoneItem(item) {
 }
 
 async function purgeExpiredItems() {
+  return queueItemWrite(purgeExpiredItemsNow);
+}
+
+async function purgeExpiredItemsNow() {
   try {
     const stored = await chrome.storage.local.get([STORAGE_KEY, ORDER_KEY, SETTINGS_KEY, COVERS_KEY]);
     const items = stored[STORAGE_KEY] || [];
@@ -327,6 +380,12 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
 ensureLegacyCleanup().catch(() => {});
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message.type === "MUTATE_ITEMS") {
+    mutateItems(message)
+      .then(sendResponse)
+      .catch(error => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
   if (message.type === "SAVE_ITEM") {
     saveItem(message.item)
       .then(sendResponse)
@@ -398,7 +457,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           ? await chrome.tabs.get(message.tabId).catch(() => null)
           : (await chrome.tabs.query({ active: true, currentWindow: true }))[0];
         if (!tab?.id || !isWebUrl(tab.url)) {
-          sendResponse({ ok: false, error: (await usesEnglish()) ? "The current page can’t be saved" : "当前页面无法保存" });
+          sendResponse({ ok: false, error: (await usesEnglish()) ? "The current page can’t be added" : "当前页面无法添加" });
           return;
         }
         const result = await quickSave(tab, message.source || "panel");
@@ -494,8 +553,8 @@ async function quickSave(tab, source = "shortcut") {
   const message = saved.refreshed
     ? (en ? `Details updated: ${pillTitle(baseItem.title)}` : `已更新信息：${pillTitle(baseItem.title)}`)
     : saved.duplicated
-      ? (en ? "This page is already saved" : "这个网页已经保存过了")
-      : (en ? `Saved: ${pillTitle(baseItem.title)}` : `已保存：${pillTitle(baseItem.title)}`);
+      ? (en ? "This page is already added" : "这个网页已经添加过了")
+      : (en ? `Added: ${pillTitle(baseItem.title)}` : `已添加：${pillTitle(baseItem.title)}`);
   await showPagePills(tab.id, [message]).catch(() => {});
   // 把结果回传，好让侧边栏 / 工具栏小窗口的按钮显示正确的字样。
   return { ok: true, duplicated: !!saved.duplicated, refreshed: !!saved.refreshed, updated: !!saved.updated };
@@ -524,7 +583,7 @@ async function showLibraryCommandNotice(tab, command) {
   const en = await usesEnglish();
   const message = command === "toggle-translation"
     ? (en ? "You’re in LaterOn. Open the page you want to translate, then press Alt+2." : "当前是 LaterOn，请打开需要翻译的网页后再按 Alt+2")
-    : (en ? "You’re in LaterOn. Open the page you want to save, then press Alt+1." : "当前是 LaterOn，请先打开想保存的网页，再按 Alt+1");
+    : (en ? "You’re in LaterOn. Open the page you want to add, then press Alt+1." : "当前是 LaterOn，请先打开想添加的网页，再按 Alt+1");
   try {
     const response = await chrome.runtime.sendMessage({
       type: "SHOW_LIBRARY_NOTICE",
@@ -601,7 +660,7 @@ async function showPagePills(tabId, messages) {
         window.setTimeout(hide, 2800 + delay);
       });
     },
-    args: [shown, overflow, en ? `${overflow} more saved` : `还有 ${overflow} 篇已保存`]
+    args: [shown, overflow, en ? `${overflow} more added` : `还有 ${overflow} 篇已添加`]
   });
 }
 
@@ -711,45 +770,47 @@ function isIncomplete(record) {
 async function resolveProject(projectId) {
   if (!projectId) return { id: null, name: "等待整理" };
   const projects = (await chrome.storage.local.get(PROJECTS_KEY))[PROJECTS_KEY] || [];
-  const matched = projects.find((project) => project.id === projectId);
+  const matched = projects.find((project) => project.id === projectId && !project.archived);
   return matched ? { id: matched.id, name: matched.name } : { id: null, name: "等待整理" };
 }
 
 async function saveItem(item, options = {}) {
-  const result = await chrome.storage.local.get(STORAGE_KEY);
-  const items = result[STORAGE_KEY] || [];
-  const normalizedUrl = normalizeUrl(item.url);
-  const index = items.findIndex((entry) => normalizeUrl(entry.url) === normalizedUrl);
+  const saved = await queueItemWrite(async () => {
+    const result = await chrome.storage.local.get(STORAGE_KEY);
+    const items = result[STORAGE_KEY] || [];
+    const normalizedUrl = normalizeUrl(item.url);
+    const index = items.findIndex((entry) => normalizeUrl(entry.url) === normalizedUrl);
 
-  // 已存在相同网址：视为重复收藏——不新建、不挪动顺序；
-  // 但会把「缺的 / 明显过期的」信息补上（YouTube 一律刷新，见 mergeDuplicateMetadata）。
-  if (index >= 0) {
-    const existing = items[index];
-    const refreshed = mergeDuplicateMetadata(existing, item);
-    if (refreshed) await chrome.storage.local.set({ [STORAGE_KEY]: items });
-    return { ok: true, item: existing, updated: true, duplicated: true, refreshed };
-  }
+    // 已存在相同网址：视为重复收藏——不新建、不挪动顺序；
+    // 但会把「缺的 / 明显过期的」信息补上（YouTube 一律刷新，见 mergeDuplicateMetadata）。
+    if (index >= 0) {
+      const existing = items[index];
+      const refreshed = mergeDuplicateMetadata(existing, item);
+      if (refreshed) await chrome.storage.local.set({ [STORAGE_KEY]: items });
+      return { ok: true, item: existing, updated: true, duplicated: true, refreshed };
+    }
 
-  const normalized = {
-    id: crypto.randomUUID(),
-    title: item.title || item.url,
-    description: item.description || "暂无摘要",
-    image: item.image || "",
-    favicon: item.favicon || "",
-    source: item.source || safeHostname(item.url),
-    projectId: null,
-    url: item.url,
-    savedAt: Date.now(),
-    status: "unread"
-  };
-  items.unshift(normalized);
-  await chrome.storage.local.set({ [STORAGE_KEY]: items });
+    const normalized = {
+      id: crypto.randomUUID(),
+      title: item.title || item.url,
+      description: item.description || "暂无摘要",
+      image: item.image || "",
+      favicon: item.favicon || "",
+      source: item.source || safeHostname(item.url),
+      projectId: null,
+      url: item.url,
+      savedAt: Date.now(),
+      status: "unread"
+    };
+    items.unshift(normalized);
+    await chrome.storage.local.set({ [STORAGE_KEY]: items });
 
-  // 批量收藏（silent）时由调用方统一显示角标，避免角标反复闪动。
-  if (!options.silent) {
+    return { ok: true, item: normalized, updated: false, duplicated: false };
+  });
+  if (!options.silent && !saved.duplicated) {
     await showActionFeedback("✓", "#111111", 1600);
   }
-  return { ok: true, item: normalized, updated: false, duplicated: false };
+  return saved;
 }
 
 // ── 一键收藏所有标签 ────────────────────────────────────────
@@ -770,12 +831,12 @@ async function saveAllTabsInWindow(source = "shortcut") {
 
     if (!targets.length) {
       await recordDiag({
-        lastStage: "结束（没有可保存的网页）",
+        lastStage: "结束（没有可添加的网页）",
         lastAdded: 0,
         lastDuplicated: 0,
         lastEnriched: 0,
         lastDegraded: 0,
-        lastError: "当前窗口没有可保存的网页",
+        lastError: "当前窗口没有可添加的网页",
         lastErrorAt: Date.now(),
         lastResultAt: Date.now()
       });
@@ -801,7 +862,7 @@ async function saveAllTabsInWindow(source = "shortcut") {
 
     // 用户关掉了「先选项目」：直接用上次用过的项目开始。
     if (settings.askFolderOnBatch === false) {
-      await stage({ lastStage: "开始保存（未启用项目选择）" });
+      await stage({ lastStage: "开始添加（未启用项目选择）" });
       return runBatchSave({
         tabs: targets,
         source,
@@ -915,8 +976,8 @@ async function runBatchSave({ tabs, source = "shortcut", notifyTabId = null, pro
     const targets = tabs || [];
     if (!targets.length) {
       await recordDiag({
-        lastStage: "结束（没有可保存的网页）",
-        lastError: "这一批里没有可保存的网页",
+        lastStage: "结束（没有可添加的网页）",
+        lastError: "这一批里没有可添加的网页",
         lastErrorAt: Date.now(),
         lastResultAt: Date.now()
       });
@@ -924,19 +985,9 @@ async function runBatchSave({ tabs, source = "shortcut", notifyTabId = null, pro
       return { ok: false, added: 0, duplicated: 0 };
     }
 
-    const stored = await chrome.storage.local.get(STORAGE_KEY);
-    const items = stored[STORAGE_KEY] || [];
-    // 网址 → 已有记录（按「引用」保存，回填封面/摘要时直接改这条记录即可）。
-    const byUrl = new Map();
-    for (const entry of items) {
-      const key = normalizeUrl(entry.url);
-      if (!byUrl.has(key)) byUrl.set(key, entry);
-    }
-
-    // savedAt 用「起始时间 - 序号」，保证收藏库里仍按标签页顺序排列。
-    // cursor 指向「下一条新收藏」要插入的位置：按顺序插入，数组原始顺序也与标签页一致。
+    // 用上一条新增记录定位插入处，保持标签顺序，同时保留期间的新收藏。
     const base = Date.now();
-    let cursor = 0;
+    let previousAddedId = null;
     let added = 0;
     let duplicated = 0;
     let movedCount = 0;
@@ -944,12 +995,12 @@ async function runBatchSave({ tabs, source = "shortcut", notifyTabId = null, pro
     let degraded = 0;
 
     // 收多篇时才播报「开始」；收一篇时静悄悄抓，最后只弹一条结果提示。
-    if (!single) await notify(en ? `Saving ${targets.length} tabs → ${folderLabel}` : `开始保存 ${targets.length} 个标签页 → ${folderLabel}`);
+    if (!single) await notify(en ? `Adding ${targets.length} tabs → ${folderLabel}` : `开始添加 ${targets.length} 个标签页 → ${folderLabel}`);
 
     for (let i = 0; i < targets.length; i += 1) {
       const tab = targets[i];
       await stage({
-        lastStage: "逐个保存中",
+        lastStage: "逐个添加中",
         lastProgress: `${i + 1}/${targets.length}`,
         lastAdded: added,
         lastDuplicated: duplicated
@@ -968,27 +1019,44 @@ async function runBatchSave({ tabs, source = "shortcut", notifyTabId = null, pro
         });
       }
 
-      const key = normalizeUrl(meta.url);
-      const existing = byUrl.get(key);
-
-      if (existing) {
+      const saved = await queueItemWrite(async () => {
+        const stored = await chrome.storage.local.get(STORAGE_KEY);
+        const items = stored[STORAGE_KEY] || [];
+        const key = normalizeUrl(meta.url);
+        const existing = items.find((entry) => normalizeUrl(entry.url) === key);
+        if (existing) {
+          const refreshed = mergeDuplicateMetadata(existing, meta);
+          const target = projectId || null;
+          const moved = (existing.projectId || null) !== target;
+          if (moved) existing.projectId = target;
+          if (refreshed || moved) await chrome.storage.local.set({ [STORAGE_KEY]: items });
+          return { record: existing, duplicated: true, refreshed, moved };
+        }
+        const record = {
+          id: crypto.randomUUID(),
+          title: meta.title || meta.url,
+          description: meta.description || "暂无摘要",
+          image: meta.image || "",
+          favicon: meta.favicon || "",
+          source: meta.source || safeHostname(meta.url),
+          projectId,
+          url: meta.url,
+          savedAt: base - i,
+          status: "unread"
+        };
+        const previousIndex = previousAddedId ? items.findIndex((entry) => entry.id === previousAddedId) : -1;
+        items.splice(previousIndex + 1, 0, record);
+        await chrome.storage.local.set({ [STORAGE_KEY]: items });
+        return { record, duplicated: false };
+      });
+      const { record, refreshed, moved } = saved;
+      if (saved.duplicated) {
         duplicated += 1;
-        // 已收藏过的网址要做两件事：
-        //  ① 以前收藏时没抓到封面 / 摘要的（比如当时页面还没加载完），这次抓到了就补上；
-        //     YouTube 则一律刷新，这样重新收藏一次就能修好旧记录里错误的信息。
-        //  ② 把它「搬进这次选中的项目」——用户既然为这一批选了项目，
-        //     就是希望这批链接都归在那里，而不是留下几条散落在原来的位置。
-        const refreshed = mergeDuplicateMetadata(existing, meta);
-        const target = projectId || null;
-        const moved = (existing.projectId || null) !== target;
-        if (moved) existing.projectId = target;
-        if (isIncomplete(existing)) degraded += 1;
-
+        if (isIncomplete(record)) degraded += 1;
         if (refreshed || moved) {
-          await chrome.storage.local.set({ [STORAGE_KEY]: items });
           if (refreshed) enriched += 1;
           if (moved) movedCount += 1;
-          const title = pillTitle(existing.title || meta.title);
+          const title = pillTitle(record.title || meta.title);
           const text = moved
             ? (en
               ? (refreshed ? `Moved to “${folderLabel}” and updated: ${title}` : `Moved to “${folderLabel}”: ${title}`)
@@ -996,34 +1064,17 @@ async function runBatchSave({ tabs, source = "shortcut", notifyTabId = null, pro
             : (en ? `Details updated: ${title}` : `已更新信息：${title}`);
           await notify(text, moved ? "move" : "");
         } else {
-          await notify(en ? `Already saved: ${pillTitle(meta.title)}` : `已保存过：${pillTitle(meta.title)}`, "skip");
+          await notify(en ? `Already added: ${pillTitle(meta.title)}` : `已添加过：${pillTitle(meta.title)}`, "skip");
         }
         continue;
       }
-
-      // ② 立刻写入收藏（一篇一写），这样收藏库那边也能一篇篇地冒出来。
-      const record = {
-        id: crypto.randomUUID(),
-        title: meta.title || meta.url,
-        description: meta.description || "暂无摘要",
-        image: meta.image || "",
-        favicon: meta.favicon || "",
-        source: meta.source || safeHostname(meta.url),
-        projectId,
-        url: meta.url,
-        savedAt: base - i,
-        status: "unread"
-      };
-      items.splice(cursor, 0, record);
-      cursor += 1;
-      byUrl.set(key, record);
-      await chrome.storage.local.set({ [STORAGE_KEY]: items });
+      previousAddedId = record.id;
 
       added += 1;
       if (isIncomplete(record)) degraded += 1;
       // ③ 成功一篇就通知一篇，并顺手更新角标数字（切到别的标签页也看得到进度）。
       await showActionFeedback(`+${added}`, "#2f9e44", 2600);
-      await notify(en ? `Saved: ${pillTitle(record.title)}` : `已保存：${pillTitle(record.title)}`);
+      await notify(en ? `Added: ${pillTitle(record.title)}` : `已添加：${pillTitle(record.title)}`);
     }
 
     // 收尾：角标停一会儿再清掉，页面上再补一条总结。
@@ -1033,14 +1084,14 @@ async function runBatchSave({ tabs, source = "shortcut", notifyTabId = null, pro
     const summary = (() => {
       if (added > 0) {
         const parts = [en ? `${added} added` : `新增 ${added} 篇`];
-        if (movedCount > 0) parts.push(en ? `${movedCount} existing pages moved to “${folderLabel}”` : `${movedCount} 篇已保存网页移入「${folderLabel}」`);
+        if (movedCount > 0) parts.push(en ? `${movedCount} existing pages moved to “${folderLabel}”` : `${movedCount} 篇已添加网页移入「${folderLabel}」`);
         const stayed = duplicated - movedCount;
         if (stayed > 0) parts.push(en ? `${stayed} already in “${folderLabel}”` : `${stayed} 篇本来就在「${folderLabel}」`);
         return en ? `Done: ${parts.join(" · ")}` : `全部完成：${parts.join("，")}`;
       }
-      if (movedCount > 0) return en ? `Done: moved ${movedCount} existing pages to “${folderLabel}”` : `全部完成：把 ${movedCount} 篇已保存网页移入「${folderLabel}」`;
+      if (movedCount > 0) return en ? `Done: moved ${movedCount} existing pages to “${folderLabel}”` : `全部完成：把 ${movedCount} 篇已添加网页移入「${folderLabel}」`;
       if (enriched > 0) return en ? `Done: updated ${enriched} pages` : `全部完成：更新了 ${enriched} 篇的信息`;
-      return en ? "All of these pages were already saved" : "这些网页都已经保存过了";
+      return en ? "All of these pages were already added" : "这些网页都已经添加过了";
     })();
     // 收一篇时结果已经在上面那条提示里说清楚了，不再重复播报总结。
     if (!single) {
@@ -1123,7 +1174,7 @@ async function showPickerOverlay(tab, payload) {
     };
     const folders = [
       { id: "", name: settings.language === "en" ? "Inbox" : "等待整理", count: unfiled, cover: coverFor("") },
-      ...projects.map((project) => ({ id: project.id, name: project.name, count: counts.get(project.id) || 0, cover: coverFor(project.id) }))
+      ...projects.filter((project) => !project.archived).map((project) => ({ id: project.id, name: project.name, count: counts.get(project.id) || 0, cover: coverFor(project.id) }))
     ];
 
     // 默认选中上次用过的项目；它如果已被删掉就退回「待整理」。
@@ -1204,7 +1255,7 @@ async function createProject(name) {
   const stored = await chrome.storage.local.get(PROJECTS_KEY);
   const projects = stored[PROJECTS_KEY] || [];
   // 同名项目不重复创建，直接选用已有那个，避免列表里出现两个「工作」。
-  const existing = projects.find((project) => project.name === clean);
+  const existing = projects.find((project) => project.name === clean && !project.archived);
   if (existing) return { ok: true, project: existing, existed: true };
 
   const project = { id: crypto.randomUUID(), name: clean, createdAt: Date.now() };
@@ -1246,7 +1297,7 @@ async function cancelPendingBatch() {
   const stored = await chrome.storage.session.get(PENDING_KEY);
   const had = !!stored[PENDING_KEY];
   await chrome.storage.session.remove(PENDING_KEY);
-  if (had) await recordDiag({ lastStage: "已取消（没有保存任何页面）", lastResultAt: Date.now() });
+  if (had) await recordDiag({ lastStage: "已取消（没有添加任何页面）", lastResultAt: Date.now() });
   return { ok: true, cancelled: had };
 }
 
@@ -1315,7 +1366,7 @@ async function extractTabMetadataById(tabId) {
     tab = null;
   }
   if (!tab) return { ok: false, error: en ? "This tab couldn’t be found" : "找不到这个标签页" };
-  if (!isWebUrl(tab.url)) return { ok: false, error: en ? "This page can’t be saved. Open a regular web page and try again." : "这个页面无法保存，请打开一个普通网页后重试。" };
+  if (!isWebUrl(tab.url)) return { ok: false, error: en ? "This page can’t be added. Open a regular web page and try again." : "这个页面无法添加，请打开一个普通网页后重试。" };
   const metadata = await extractTabMetadata(tab);
   return { ok: true, metadata: { ...metadata, url: tab.url } };
 }

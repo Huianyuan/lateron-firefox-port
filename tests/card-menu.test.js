@@ -105,6 +105,7 @@ const stored = (id) => store.laterOnItems.find((item) => item.id === id);
 (async () => {
   window.eval(i18nSource);
   window.eval(dialogSource);
+  require('./helpers/item-mutation')(window);
   window.eval(librarySource);
   await tick(120);
   // 完整界面现在固定从“全部项目”首页打开；进入具体项目后才会渲染文章卡片。

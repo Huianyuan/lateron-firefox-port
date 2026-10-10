@@ -110,6 +110,10 @@ async function search(word) {
   await tick(180);
 }
 
+require('./helpers/item-mutation')(window);
+
+window.eval(fs.readFileSync(`${ROOT}/i18n.js`, "utf8"));
+window.scrollTo = () => {};
 window.eval(sidepanelSource);
 
 (async () => {

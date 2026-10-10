@@ -81,6 +81,7 @@ function makeChrome(window, store, extra = {}) {
     if (typeof window.crypto?.randomUUID !== "function") {
       Object.defineProperty(window, "crypto", { configurable: true, value: { randomUUID: () => "fake-" + Math.random().toString(36).slice(2) } });
     }
+    require('./helpers/item-mutation')(window);
     window.eval(librarySource);
     await tick();
 
@@ -109,6 +110,7 @@ function makeChrome(window, store, extra = {}) {
     if (typeof window.crypto?.randomUUID !== "function") {
       Object.defineProperty(window, "crypto", { configurable: true, value: { randomUUID: () => "fake-" + Math.random().toString(36).slice(2) } });
     }
+    require('./helpers/item-mutation')(window);
     window.eval(librarySource);
     await tick();
 
@@ -140,6 +142,7 @@ function makeChrome(window, store, extra = {}) {
     // 模拟「从收藏墙切过来」：地址栏里有历史可以退。
     //（jsdom 里 chrome-extension:// 是不透明源，pushState 会被拒绝，只能直接伪造长度。）
     Object.defineProperty(window.history, "length", { configurable: true, value: 2 });
+
 
     window.eval(settingsSource);
     await tick();

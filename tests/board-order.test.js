@@ -75,6 +75,7 @@ async function boot(store) {
     sidePanel: { open: async () => ({}), close: async () => ({}) }
   };
   window.eval(dialogSource);
+  require('./helpers/item-mutation')(window);
   window.eval(librarySource);
   const tick = (ms = 20) => new Promise((resolve) => window.setTimeout(resolve, ms));
   await tick();

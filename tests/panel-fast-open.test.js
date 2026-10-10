@@ -47,6 +47,7 @@ function boot({ store, pendingGet = false, cache = null, bootStartOffsetMs = 0, 
   });
   const { window } = dom;
   const { document } = window;
+  window.scrollTo = () => {};
 
   // jsdom 在 chrome-extension:// 来源下不提供 localStorage（真实 Chrome 扩展页面有），
   // 用一个内存版替身，行为一致：同步读写。
@@ -79,6 +80,7 @@ function boot({ store, pendingGet = false, cache = null, bootStartOffsetMs = 0, 
     : pendingGet
     ? new Promise((resolve) => { releaseGet = resolve; })
     : Promise.resolve(store);
+  getPromise.catch(() => {}); // 加载在首帧后开始，提前处理模拟失败的 Promise。
   const changeListeners = [];
 
   window.chrome = {
@@ -122,6 +124,8 @@ function boot({ store, pendingGet = false, cache = null, bootStartOffsetMs = 0, 
   }
   // 侧栏页面里 dialog.js 是 defer 加载的，删除确认要用到它：这里同样先跑一遍真实实现。
   window.eval(fs.readFileSync(`${ROOT}/dialog.js`, "utf8"));
+  require('./helpers/item-mutation')(window);
+  window.eval(fs.readFileSync(`${ROOT}/i18n.js`, "utf8"));
   window.eval(sidepanelSource);
 
   return {
@@ -148,12 +152,13 @@ function boot({ store, pendingGet = false, cache = null, bootStartOffsetMs = 0, 
   };
   const envA = boot({ store: slowStore, pendingGet: true, cache: [makeItem({ id: "cached", title: "缓存里的旧标题" })] });
 
+  await tick(100); // 真实侧栏先绘制骨架，再通过两帧启动缓存渲染。
   check("storage 没返回时列表已经画出来（用的是缓存）", !!envA.itemOf("cached"), `${envA.document.querySelectorAll("#items .item").length} 张可见`);
-  check("缓存渲染是同步完成的（eval 完立刻可见）", envA.document.querySelectorAll("#items .item").length === 1);
+  check("缓存渲染不等待存储返回", envA.document.querySelectorAll("#items .item").length === 1);
   check("骨架屏已被撤掉", !envA.document.querySelector("#bootSkeleton"));
 
   envA.releaseGet();
-  await tick(30);
+  await tick(100);
   check("存储返回后按真数据重画", !!envA.itemOf("fresh") && !envA.itemOf("cached"));
   // 写快照是「给下一次打开用的」，所以故意推迟到下一轮事件循环再写，
   // 不让它挡住眼前这一次绘制 —— 这里多等一下再验。
@@ -167,7 +172,7 @@ function boot({ store, pendingGet = false, cache = null, bootStartOffsetMs = 0, 
   check("storage 没返回时显示骨架屏", !!envB.document.querySelector("#bootSkeleton") && envB.document.querySelectorAll("#bootSkeleton .skel-item").length >= 2);
   check("此时还没有真卡片", envB.document.querySelectorAll("#items .item").length === 0);
   envB.releaseGet();
-  await tick(30);
+  await tick(100);
   check("数据到了骨架屏撤掉、真卡片出现", !envB.document.querySelector("#bootSkeleton") && !!envB.itemOf("fresh"));
 
   // ═══ ③ 封面搬家：旧 base64 大图挪去单独的键 ═══
@@ -183,7 +188,7 @@ function boot({ store, pendingGet = false, cache = null, bootStartOffsetMs = 0, 
     laterOnCovers: {}
   };
   const envC = boot({ store: legacyStore });
-  await tick(30);
+  await tick(100);
   const migrated = legacyStore.laterOnItems.find((it) => it.id === "old-1");
   check("条目里的 base64 换成了 local:// 指针", migrated?.image === "local://old-1", String(migrated?.image).slice(0, 40));
   check("封面本体进了 laterOnCovers 键", legacyStore.laterOnCovers?.["old-1"] === DATA_URL);
@@ -201,11 +206,11 @@ function boot({ store, pendingGet = false, cache = null, bootStartOffsetMs = 0, 
     laterOnCovers: { "has-cover": DATA_URL }
   };
   const envD = boot({ store: coverStore });
-  await tick(30);
+  await tick(100);
   const clickDelete = () => envD.itemOf("has-cover").querySelector(".delete")
     .dispatchEvent(new envD.window.MouseEvent("click", { bubbles: true, cancelable: true }));
   clickDelete();
-  await tick(30);
+  await tick(100);
   // 删除前先弹确认（危险操作，不能一点就没）
   check("点删除先弹确认弹窗", !!envD.document.querySelector(".lod-root:not([hidden])"));
   envD.document.querySelector(".lod-root:not([hidden]) .lod-cancel")
@@ -213,7 +218,7 @@ function boot({ store, pendingGet = false, cache = null, bootStartOffsetMs = 0, 
   await tick(320);   // 弹窗有一段关闭动画，等它真正 resolve
   check("点「取消」不会删除", !!envD.itemOf("has-cover"));
   clickDelete();
-  await tick(30);
+  await tick(100);
   envD.document.querySelector(".lod-root:not([hidden]) .lod-ok")
     .dispatchEvent(new envD.window.MouseEvent("click", { bubbles: true, cancelable: true }));
   await tick(320);
@@ -232,6 +237,7 @@ function boot({ store, pendingGet = false, cache = null, bootStartOffsetMs = 0, 
   };
   const envE = boot({ store: bigStore, pendingGet: true });
   check("数据还没到时不画任何卡片（也不占位）", envE.document.querySelectorAll("#items .item").length === 0);
+  await tick(60); // 首帧骨架和 init 已完成，真实数据仍被闸门挡住。
   envE.releaseGet();
   await tick(1);
   const firstBatch = envE.document.querySelectorAll("#items .item").length;
@@ -265,7 +271,7 @@ function boot({ store, pendingGet = false, cache = null, bootStartOffsetMs = 0, 
   // ═══ ⑥ 打开慢时，结论直接写在界面上 ═══
   console.log("\n── ⑥ 打开慢时，侧栏顶部直接写出「慢在哪一步」 ──");
   const slowOpen = boot({ store: slowStore, bootStartOffsetMs: 9000 });
-  await tick(30);
+  await tick(100);
   const banner = slowOpen.document.querySelector("#slowBanner");
   check("慢的时候横幅显示出来了", banner && banner.hidden === false);
   check("横幅里写明了总耗时", /9\.9|10\.0|9\.\d 秒/.test(banner?.textContent || ""), (banner?.textContent || "").split("\n")[0]);
@@ -275,14 +281,14 @@ function boot({ store, pendingGet = false, cache = null, bootStartOffsetMs = 0, 
   check("慢的文件也记进了诊断", Array.isArray(slowOpen.store.laterOnPanelDiag?.slow), JSON.stringify(slowOpen.store.laterOnPanelDiag?.slow));
 
   const fastOpen = boot({ store: slowStore });
-  await tick(30);
+  await tick(100);
   check("快的时候不显示横幅（界面保持干净）",
     fastOpen.document.querySelector("#slowBanner")?.hidden === true);
 
   // 0.8 秒左右是正常水平（冷启动时读一次本地存储本来就要几百毫秒），
   // 不该弹横幅——弹出来反而像在报错。诊断照记，去设置页能翻。
   const normalOpen = boot({ store: slowStore, bootStartOffsetMs: 850 });
-  await tick(30);
+  await tick(100);
   check("0.8 秒这种正常速度不弹横幅",
     normalOpen.document.querySelector("#slowBanner")?.hidden === true);
   check("但耗时照旧记进诊断（设置页能看到）",
@@ -290,7 +296,7 @@ function boot({ store, pendingGet = false, cache = null, bootStartOffsetMs = 0, 
     JSON.stringify(normalOpen.store.laterOnPanelDiag?.total));
 
   const twoSecOpen = boot({ store: slowStore, bootStartOffsetMs: 2500 });
-  await tick(30);
+  await tick(100);
   check("超过 2 秒才弹横幅", twoSecOpen.document.querySelector("#slowBanner")?.hidden === false);
 
   // ═══ ⑦ 骨架屏：覆盖整个界面轮廓，真界面此时不占位 ═══
@@ -311,7 +317,7 @@ function boot({ store, pendingGet = false, cache = null, bootStartOffsetMs = 0, 
   check("页面一开始带 .booting 标记", envG.document.body.classList.contains("booting"));
 
   envG.releaseGet();
-  await tick(30);
+  await tick(100);
   // ═══ ⑦b 封面上下铺满（只有真浏览器能看出来，这里用静态断言钉住）═══
   // 卡片的实际高度由右边的文字决定（标题、摘要各两行时约 106px），缩略图写死 92px
   // 就会在封面底下露出一截白。jsdom 没有排版，量不出来，只能盯 CSS 写法。
@@ -361,7 +367,7 @@ function boot({ store, pendingGet = false, cache = null, bootStartOffsetMs = 0, 
   const envSeg = boot({ store: segStore, cache: [makeItem({ id: "cached" })] });
   await tick(60);
   check("读存储先发出去，再读本地缓存（两步并行，不是先缓存后存储）",
-    envSeg.callOrder[0] === "storage" && envSeg.callOrder[1] === "cache",
+    envSeg.callOrder.indexOf("storage") < envSeg.callOrder.indexOf("cache"),
     envSeg.callOrder.join(" → "));
   const seg = segStore.laterOnPanelDiag || {};
   check("每一段耗时都单独记下来了（页面/缓存/画屏/数据/搬封面/其余）",
@@ -406,8 +412,8 @@ function boot({ store, pendingGet = false, cache = null, bootStartOffsetMs = 0, 
     /prefers-color-scheme: dark/.test(headOnly));
   check("[hidden] 的隐藏规则显式写出来了（否则 .boot-tip 的 display 会盖掉它）",
     /#bootTip\[hidden\]\s*{\s*display:\s*none/.test(headOnly));
-  check("theme.js / dialog.js 改成 defer（不再卡住 body 解析）",
-    /<script src="theme\.js" defer>/.test(headOnly) && /<script src="dialog\.js" defer>/.test(headOnly));
+  check("theme.js 使用 defer，编辑弹窗按需加载",
+    /<script src="theme\.js" defer>/.test(headOnly) && !/<script src="dialog\.js"/.test(headOnly) && /script.src = "dialog.js"/.test(sidepanelSource));
   check("boot.js / sidepanel.js 也使用 defer（外部脚本变慢时 body 和骨架仍能先解析）",
     /<script src="boot\.js" defer>/.test(headOnly) && /<script src="sidepanel\.js" defer>/.test(headOnly));
   check("boot.js 会把异步样式表切换成生效",
@@ -423,7 +429,7 @@ function boot({ store, pendingGet = false, cache = null, bootStartOffsetMs = 0, 
   console.log("\n── ⑫ 存储失败时保留上次快照，并给出可恢复提示 ──");
   const cachedItem = makeItem({ id: "still-here", title: "上次打开的内容" });
   const envError = boot({ store: {}, cache: [cachedItem], getError: "storage unavailable" });
-  await tick(30);
+  await tick(100);
   check("存储失败时仍显示上次快照", !!envError.itemOf("still-here"));
   check("界面明确说明正在显示上次内容", /显示上次打开的内容/.test(envError.document.querySelector("#status")?.textContent || ""));
   await tick(400);

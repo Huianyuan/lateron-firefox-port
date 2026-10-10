@@ -131,6 +131,7 @@ const resetLogs = () => {
 
 window.eval(i18nSource);
 window.eval(tabNavigationSource);
+require('./helpers/item-mutation')(window);
 window.eval(librarySource);
 
 (async () => {

@@ -95,6 +95,7 @@ window.Element.prototype.getBoundingClientRect = function () {
 
 window.eval(i18nSource);
 window.eval(dialogSource);
+require('./helpers/item-mutation')(window);
 window.eval(librarySource);
 
 let failures = 0;
@@ -296,7 +297,7 @@ async function saveBoardEdit() {
   click(document.querySelector('.nav-item[data-filter="unread"]'));
   await tick(40);
   check("切到未读后，自己挑的封面照样用", coverSrcs("work").join(" ") === "https://example.com/3.jpg", coverSrcs("work").join(" "));
-  check("但篇数只算当前筛选里的", /4 篇/.test(boardOf("work").querySelector(".board-meta").textContent),
+  check("项目概况仍统计全部网页", /5 篇/.test(boardOf("work").querySelector(".board-meta").textContent),
     boardOf("work").querySelector(".board-meta").textContent);
   check("侧栏缩略图也没跟着换", thumbOf("work") === "https://example.com/3.jpg", thumbOf("work"));
   click(document.querySelector('.nav-item[data-filter="all"]'));
