@@ -1,3 +1,28 @@
+// ── 侧栏垫片兜底 ──────────────────────────────────────────────────────
+// ff-sidebar.js 应已在页面里先加载（sidepanel.html / library.html / settings.html 都引了它）。
+// 这里只在它缺席时（jsdom 单元测试，或某个页面忘了引脚本）补一个「仅 Chrome」的兜底实现：
+// 直接转发到 chrome.sidePanel，保证 Chrome 行为与改造前逐字一致；Firefox 下因为压根没有
+// chrome.sidePanel，这里会退化成「侧栏打不开」而不是整页崩。
+// 注意：往 globalThis 上补、不声明局部变量，因此不会遮蔽真垫片。
+// canOpen / canClose 必须是 getter：原代码是在调用点现查 chrome.sidePanel.open 是否存在的，
+// 测试里会中途把侧栏能力摘掉/恢复，静态布尔量会让这些用例失真。
+if (!globalThis.LaterOnSidePanel) {
+  const panelApi = () => (typeof chrome !== "undefined" ? chrome : globalThis.browser);
+  globalThis.LaterOnSidePanel = {
+    get isFirefoxSidebar() { return false; },
+    get canOpen() { return typeof panelApi()?.sidePanel?.open === "function"; },
+    get canClose() { return typeof panelApi()?.sidePanel?.close === "function"; },
+    async setPanelBehavior(options) {
+      const api = panelApi();
+      if (typeof api?.sidePanel?.setPanelBehavior !== "function") return false;
+      await api.sidePanel.setPanelBehavior(options);
+      return true;
+    },
+    async open(options) { return panelApi().sidePanel.open(options); },
+    async close(options) { return panelApi().sidePanel.close(options); }
+  };
+}
+
 const STORAGE_KEY = "laterOnItems";
 const PROJECTS_KEY = "laterOnProjects";
 const ACTIVE_PROJECT_KEY = "laterOnActiveProject";
@@ -2190,10 +2215,19 @@ async function openItem(event, item) {
   // 记下「正在读这篇」——侧栏据此高亮并滚动定位到它，两个视图保持一致。
   chrome.storage.local.set({ [CURRENT_ITEM_KEY]: item.id });
 
+  // Firefox：sidebarAction.open() 必须在用户手势的同步调用栈里触发，await 之后手势就没了。
+  // 所以在这里（本函数第一个 await 之前）先把侧栏打开的机会用掉。
+  // 此时还不知道目标窗口 —— 但 Firefox 的 sidebarAction.open() 本来就只作用于当前窗口，
+  // 而这次点击就发生在当前窗口，语义正好对上。
+  // Chrome 走原来的路（它接受 windowId，也容忍 await 之后调用）。
+  const earlyPanelOpen = LaterOnSidePanel.isFirefoxSidebar
+    ? LaterOnSidePanel.open().then(() => true, () => false)
+    : null;
+
   const windowId = await resolveWindowId();
   const openTab = await globalThis.LaterOnTabs.findOpen(target, { excludeTabId: libraryTabId });
   const destinationWindowId = openTab?.windowId ?? windowId;
-  if (!(await openSidePanel(destinationWindowId))) {
+  if (!(await openSidePanel(destinationWindowId, earlyPanelOpen))) {
     // 侧栏打不开（极少数情况）：至少别让这次点击落空。
     showToast(tr("sidePanelFallback"));
     if (openTab) await globalThis.LaterOnTabs.activate(openTab);
@@ -2237,16 +2271,20 @@ async function resolveWindowId() {
   return libraryWindowId;
 }
 
-// 打开浏览器侧栏。必须在用户点击的手势里调用，所以放在流程最前面。
-async function openSidePanel(windowId) {
-  if (typeof chrome.sidePanel?.open !== "function") return false;
+// 打开浏览器侧栏。
+// Chrome：必须在用户点击的手势里调用，所以只能放在流程最前面（见 openItem 的 earlyPanelOpen）。
+// Firefox：sidebarAction.open() 同样要求用户手势，由 openItem 在同步段里提前发起，
+//          这里只负责汇总结果；windowId 会被垫片忽略并打一条 warn。
+async function openSidePanel(windowId, earlyPanelOpen) {
+  if (earlyPanelOpen) return await earlyPanelOpen;      // Firefox：手势已在 openItem 里用掉
+  if (!LaterOnSidePanel.canOpen) return false;
   if (windowId != null) {
-    try { await chrome.sidePanel.open({ windowId }); return true; } catch {}
+    try { await LaterOnSidePanel.open({ windowId }); return true; } catch {}
   }
   // 缓存的窗口 id 过期时（比如刚把收藏库拖到另一个窗口）再刷新一次。
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (tab?.windowId != null) { await chrome.sidePanel.open({ windowId: tab.windowId }); return true; }
+    if (tab?.windowId != null) { await LaterOnSidePanel.open({ windowId: tab.windowId }); return true; }
   } catch {}
   return false;
 }

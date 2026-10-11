@@ -11,6 +11,8 @@
     <link rel="stylesheet" href="theme-vars.css" />
     <link rel="stylesheet" href="dialog.css" />
     <link rel="stylesheet" href="settings.css" />
+    <!-- Firefox 侧栏垫片：设置页也要用它的能力位判断（决定是否显示「翻译不可用」说明，见 8.4.2） -->
+    <script src="ff-sidebar.js"></script>
     <script src="theme.js"></script>
     <script src="i18n.js"></script>
     <script src="dialog.js"></script>
@@ -89,12 +91,12 @@
 
         <section class="settings-group">
           <h2 data-i18n="shortcuts">快捷键</h2>
-          <p class="setting-note" data-i18n="shortcutsNote">这些是全局快捷键，用于在任意网页上添加或翻译。Chrome 不允许扩展在内部修改快捷键，请在 Chrome 的快捷键页面设置。</p>
+          <p class="setting-note" data-i18n="shortcutsNote">这些是全局快捷键，用于在任意网页上添加网页。浏览器不允许扩展在内部修改快捷键，请在浏览器自己的快捷键设置页里修改。</p>
           <div class="setting-row">
             <div class="setting-label"><strong data-i18n="cmdSavePage">添加当前网页</strong><span id="cmdSave" data-i18n="loading">读取中…</span></div>
           </div>
-          <div class="setting-row">
-            <div class="setting-label"><strong data-i18n="cmdTranslatePage">翻译当前网页</strong><span id="cmdTranslate" data-i18n="loading">读取中…</span></div>
+          <div class="setting-row" id="ffTranslationNote" hidden>
+            <div class="setting-label"><strong data-i18n="ffNoTranslationTitle">翻译功能在当前浏览器不可用</strong><span data-i18n="ffNoTranslationBody">LaterOn 的网页翻译依赖 Chrome 内建 AI 接口，Firefox 没有提供对应能力。</span></div>
           </div>
           <div class="setting-row">
             <div class="setting-label"><strong data-i18n="cmdSaveAllTabs">添加当前窗口所有标签</strong><span id="cmdSaveAll" data-i18n="loading">读取中…</span></div>
@@ -103,7 +105,7 @@
             <div class="setting-label"><strong data-i18n="inLibrary">在 LaterOn 内</strong><span data-i18n="searchFocusHint">按 ⌘ / Ctrl + K 聚焦搜索框</span></div>
           </div>
           <div class="setting-row">
-            <button id="openShortcuts" class="setting-action" type="button" data-i18n="manageShortcuts">在 Chrome 中管理快捷键</button>
+            <button id="openShortcuts" class="setting-action" type="button" data-i18n="manageShortcuts">管理浏览器快捷键</button>
           </div>
           <!-- 自检信息平时折叠：只在排查快捷键问题时才展开，首页不再堆一排「读取中…」 -->
           <details class="settings-diagnostics">

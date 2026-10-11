@@ -1,3 +1,27 @@
+// ── 侧栏垫片兜底 ──────────────────────────────────────────────────────
+// ff-sidebar.js 应已在页面里先加载（sidepanel.html / library.html / settings.html 都引了它）。
+// 这里只在它缺席时（jsdom 单元测试，或某个页面忘了引脚本）补一个「仅 Chrome」的兜底实现：
+// 直接转发到 chrome.sidePanel，保证 Chrome 行为与改造前逐字一致；Firefox 下因为压根没有
+// chrome.sidePanel，这里会退化成「侧栏关不掉、走 window.close() 退路」而不是整页崩。
+// 注意：往 globalThis 上补、不声明局部变量，因此不会遮蔽真垫片。
+// canOpen / canClose 必须是 getter：原代码是在调用点现查 chrome.sidePanel 是否存在的。
+if (!globalThis.LaterOnSidePanel) {
+  const panelApi = () => (typeof chrome !== "undefined" ? chrome : globalThis.browser);
+  globalThis.LaterOnSidePanel = {
+    get isFirefoxSidebar() { return false; },
+    get canOpen() { return typeof panelApi()?.sidePanel?.open === "function"; },
+    get canClose() { return typeof panelApi()?.sidePanel?.close === "function"; },
+    async setPanelBehavior(options) {
+      const api = panelApi();
+      if (typeof api?.sidePanel?.setPanelBehavior !== "function") return false;
+      await api.sidePanel.setPanelBehavior(options);
+      return true;
+    },
+    async open(options) { return panelApi().sidePanel.open(options); },
+    async close(options) { return panelApi().sidePanel.close(options); }
+  };
+}
+
 const STORAGE_KEY = "laterOnItems";
 const PROJECTS_KEY = "laterOnProjects";
 const ACTIVE_PROJECT_KEY = "laterOnActiveProject";
@@ -619,7 +643,11 @@ document.querySelector("#openLibrary").addEventListener("click", async () => {
     });
     if (!response?.ok || !activeTab?.windowId) throw new Error("完整界面未能打开");
     libraryOpened = true;
-    await chrome.sidePanel.close({ windowId: activeTab.windowId });
+    // Chrome：关闭侧栏（支持指定窗口）。
+    // Firefox：走 sidebarAction.close()，但它的可用性有两种说法（见 7.5.2），
+    // 所以这里按 canClose 分档，并有 window.close() 退路。
+    const closed = await LaterOnSidePanel.close({ windowId: activeTab.windowId }).catch(() => false);
+    if (!closed) window.close();      // 退路 B：面板内自关（自身能否生效见待实测项 A-05）
   } catch (error) {
     console.error("切换完整界面失败", error);
     if (libraryOpened) window.close();
@@ -1448,9 +1476,12 @@ async function openItem(item) {
   if (openTab) {
     if (autoMarkRead && item.status === "unread") await updateItem(item.id, { status: "reading" });
     await globalThis.LaterOnTabs.activate(openTab);
-    // 如果命中的页面在另一个窗口，也让 LaterOn 侧栏跟到那个窗口。
-    if (openTab.windowId != null && typeof chrome.sidePanel?.open === "function") {
-      await chrome.sidePanel.open({ windowId: openTab.windowId }).catch(() => null);
+    // Chrome：命中的页面在另一个窗口时，让侧栏跟到那个窗口。
+    // Firefox：sidebarAction.open() 只能开当前窗口，跨窗口做不到 ——
+    //          而且这里已经过了多个 await，手势早没了，调用只会被拒。
+    //          所以 Firefox 分支直接跳过（侧栏本来就还开在当前窗口，用户能看到同一份列表）。
+    if (!LaterOnSidePanel.isFirefoxSidebar && openTab.windowId != null && LaterOnSidePanel.canOpen) {
+      await LaterOnSidePanel.open({ windowId: openTab.windowId }).catch(() => null);
     }
     return;
   }

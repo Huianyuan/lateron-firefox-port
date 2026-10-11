@@ -1,6 +1,11 @@
 .DS_Store
 .workbuddy/
 dist/
+node_modules/
+web-ext-artifacts/
+__pycache__/
+*.xpi
+*.zip
 tests/board-preview.html
 tests/dialog-preview.html
 tests/picker-preview.html

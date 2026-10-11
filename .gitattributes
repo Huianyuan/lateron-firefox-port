@@ -1,0 +1,10 @@
+# 统一行尾，避免 Windows/Linux 检出内容不一致（打包产物必须逐字节可复现）
+* text=auto eol=lf
+
+# 二进制资源不做行尾转换
+*.png binary
+*.webp binary
+*.jpg binary
+*.ico binary
+*.zip binary
+*.xpi binary

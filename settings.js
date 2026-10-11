@@ -70,19 +70,44 @@ async function init() {
   try {
     const commands = await chrome.commands.getAll();
     const save = commands.find((c) => c.name === "quick-save");
-    const translate = commands.find((c) => c.name === "toggle-translation");
     const saveAll = commands.find((c) => c.name === "save-all-tabs");
+    // Firefox 版没有 toggle-translation 命令，也没有 #cmdTranslate 元素（见 8.4.1），
+    // 所以对它的写入必须加空值守卫，否则会抛 TypeError 并中断整个设置页初始化。
+    const cmdTranslate = document.querySelector("#cmdTranslate");
     document.querySelector("#cmdSave").textContent = save?.shortcut ? t("shortcutDefault", { shortcut: save.shortcut, def: "Alt+1" }) : t("shortcutNotSet", { def: "Alt+1" });
-    document.querySelector("#cmdTranslate").textContent = translate?.shortcut ? t("shortcutDefault", { shortcut: translate.shortcut, def: "Alt+2" }) : t("shortcutNotSet", { def: "Alt+2" });
+    if (cmdTranslate) {
+      const translate = commands.find((c) => c.name === "toggle-translation");
+      cmdTranslate.textContent = translate?.shortcut ? t("shortcutDefault", { shortcut: translate.shortcut, def: "Alt+2" }) : t("shortcutNotSet", { def: "Alt+2" });
+    }
     document.querySelector("#cmdSaveAll").textContent = saveAll?.shortcut ? t("shortcutDefault", { shortcut: saveAll.shortcut, def: "Alt+Shift+1" }) : t("shortcutNotSet", { def: "Alt+Shift+1" });
   } catch {
-    document.querySelector("#cmdSave").textContent = t("shortcutNotSet", { def: "Alt+1" });
-    document.querySelector("#cmdTranslate").textContent = t("shortcutNotSet", { def: "Alt+2" });
-    document.querySelector("#cmdSaveAll").textContent = t("shortcutNotSet", { def: "Alt+Shift+1" });
+    // commands.getAll 在 Firefox 上可能不可用（或抛错），这里用「有则写、无则跳过」的写法兜底。
+    // 注意：不能写 `document.querySelector("#x")?.textContent = ...`，可选链不能出现在赋值左侧，
+    // 那是语法错误（本轮实测 settings.js 因此 node --check 失败）。
+    const setText = (selector, text) => {
+      const node = document.querySelector(selector);
+      if (node) node.textContent = text;
+    };
+    setText("#cmdSave", t("shortcutNotSet", { def: "Alt+1" }));
+    setText("#cmdTranslate", t("shortcutNotSet", { def: "Alt+2" }));
+    setText("#cmdSaveAll", t("shortcutNotSet", { def: "Alt+Shift+1" }));
+  }
+
+  // Firefox：把「翻译功能不可用」的说明显示出来（HTML 里默认 hidden，Chrome 就永远看不到它）。
+  // 这里用垫片能力位而不是探测 chrome.sidePanel，语义更明确，也不会给 linter 加一条 UNSUPPORTED_API。
+  if (globalThis.LaterOnSidePanel?.isFirefoxSidebar) {
+    const note = document.querySelector("#ffTranslationNote");
+    if (note) note.hidden = false;
   }
 
   document.querySelector("#openShortcuts").addEventListener("click", () => {
-    chrome.tabs.create({ url: "chrome://extensions/shortcuts" }).catch(() => {
+    // Chrome 有直达的 chrome://extensions/shortcuts；Firefox 没有等价的直达页，
+    // 只能开附加组件管理器（about:addons），由用户点齿轮 →「管理扩展快捷键」。
+    // about:addons 属浏览器内部页，扩展能否用 tabs.create 打开它见待实测项 A-16；
+    // 打不开就走 catch，弹窗文案已改成 Firefox 能照做的步骤（见 8.4.3）。
+    const isFirefox = globalThis.LaterOnSidePanel?.isFirefoxSidebar === true;
+    const url = isFirefox ? "about:addons" : "chrome://extensions/shortcuts";
+    chrome.tabs.create({ url }).catch(() => {
       LaterOnDialog.alert({
         title: t("openShortcutsFailTitle"),
         message: t("openShortcutsFailMsg")

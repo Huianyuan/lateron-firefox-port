@@ -1,0 +1,92 @@
+{
+  "manifest_version": 3,
+  "name": "__MSG_extensionName__",
+  "version": "1.66.1",
+  "default_locale": "zh_CN",
+  "description": "__MSG_extensionDescription__",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "unlimitedStorage",
+    "alarms",
+    "scripting",
+    "tabs",
+    "contextMenus"
+  ],
+  "host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  "action": {
+    "default_title": "__MSG_actionTitle__",
+    "default_icon": {
+      "16": "icon16.png",
+      "32": "icon32.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
+  },
+  "omnibox": {
+    "keyword": "lo"
+  },
+  "sidebar_action": {
+    "default_panel": "sidepanel.html",
+    "default_title": "__MSG_actionTitle__",
+    "default_icon": {
+      "16": "icon16.png",
+      "32": "icon32.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    },
+    "open_at_install": true
+  },
+  "background": {
+    "scripts": [
+      "ff-sidebar.js",
+      "url-utils.js",
+      "reading-position-background.js",
+      "background.js"
+    ]
+  },
+  "commands": {
+    "quick-save": {
+      "suggested_key": {
+        "default": "Alt+1"
+      },
+      "description": "__MSG_commandSavePage__"
+    },
+    "save-all-tabs": {
+      "suggested_key": {
+        "default": "Alt+Shift+1"
+      },
+      "description": "__MSG_commandSaveAllTabs__"
+    }
+  },
+  "icons": {
+    "16": "icon16.png",
+    "32": "icon32.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "icon128.png"
+      ],
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ]
+    }
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "lateron-ff-port-695d5826@lhy.local",
+      "strict_min_version": "115.0"
+    }
+  },
+  "options_ui": {
+    "page": "settings.html",
+    "open_in_tab": true
+  }
+}

@@ -94,6 +94,8 @@
       <link rel="stylesheet" href="theme-vars.css" />
       <link rel="stylesheet" href="sidepanel.css" />
     </noscript>
+    <!-- Firefox 侧栏垫片：必须在所有其它脚本之前执行（sidepanel.js 会用到 LaterOnSidePanel） -->
+    <script src="ff-sidebar.js" defer></script>
     <!-- 启动占位提示（自带计时）：早于其他脚本，页面一进来就能显示「正在打开…」 -->
     <script src="boot.js" defer></script>
     <!-- defer：不卡住 <body> 的解析（骨架屏因此能更早被浏览器读进来） -->
