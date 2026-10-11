@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Build a minimal, reproducible LaterOn extension ZIP from an explicit allowlist."""
+"""Build a minimal, reproducible LaterOn extension ZIP from an explicit allowlist.
+
+用法：
+    python scripts/build-release.py                      # Chrome 版 → dist/LaterOn-<v>.zip
+    python scripts/build-release.py --target firefox     # Firefox 直装版（min 115）→ dist/LaterOn-<v>-firefox.zip
+    python scripts/build-release.py --target firefox --amo   # AMO 签名版（dcp + min 140）→ dist/LaterOn-<v>-firefox-amo.zip
+"""
 
 from __future__ import annotations
 
@@ -19,6 +25,14 @@ MANIFEST_SOURCE = {
     "chrome": ROOT / "manifest.json",
     "firefox": ROOT / "manifest.firefox.json",
 }
+
+# AMO（addons.mozilla.org）提交要求：2025-11-03 起，提交到 AMO 的新扩展必须在
+# browser_specific_settings.gecko 里声明 data_collection_permissions，否则会被直接拒绝；
+# 该键只有 Firefox 140+ 认识，所以 AMO 目标同时把 strict_min_version 抬到 140，
+# 避免出现"声明了、但对声明范围内的旧版本其实无效"的清单。
+# LaterOn 不上传任何数据 → required: ["none"]。
+AMO_MIN_VERSION = "140.0"
+DATA_COLLECTION_PERMISSIONS = {"required": ["none"]}
 
 # Only files required by the installed extension belong in a release package.
 # Keep this list explicit: adding a test, screenshot, design draft or document to
@@ -97,14 +111,49 @@ def release_files() -> list[Path]:
     return sorted(files, key=relative_name)
 
 
-def validate_manifest(files: list[Path], target: str = "chrome") -> str:
+def load_manifest(target: str, amo: bool = False) -> tuple[dict, bytes]:
+    """返回（解析后的 manifest 字典, 写进归档的字节）。
+
+    amo=True 时不动磁盘上的源文件，只在内存里补 AMO 要求的两个键 ——
+    这样"给 GitHub 直装用的 115 版"和"给 AMO 签名用的 140 版"
+    永远来自同一份 manifest.firefox.json，不会互相漂移。
+    """
     source = MANIFEST_SOURCE[target]
     if not source.is_file():
         raise RuntimeError(f"Missing manifest for target {target}: {source.name}")
+
     manifest = json.loads(source.read_text(encoding="utf-8"))
+    if not amo:
+        return manifest, source.read_bytes()
+    if target != "firefox":
+        raise RuntimeError("--amo is only valid together with --target firefox")
+
+    gecko = manifest.setdefault("browser_specific_settings", {}).setdefault("gecko", {})
+    gecko["data_collection_permissions"] = DATA_COLLECTION_PERMISSIONS
+    gecko["strict_min_version"] = AMO_MIN_VERSION
+    payload = json.dumps(manifest, ensure_ascii=False, indent=2) + "\n"
+    return manifest, payload.encode("utf-8")
+
+
+def _version_tuple(value: str) -> tuple[int, ...]:
+    parts: list[int] = []
+    for piece in str(value).split("."):
+        if not piece.isdigit():
+            break
+        parts.append(int(piece))
+    return tuple(parts) or (0,)
+
+
+def validate_manifest(
+    files: list[Path],
+    target: str,
+    manifest: dict,
+    source_name: str,
+    amo: bool = False,
+) -> str:
     version = str(manifest.get("version", "")).strip()
     if not version:
-        raise RuntimeError(f"{source.name} has no version")
+        raise RuntimeError(f"{source_name} has no version")
 
     names = {relative_name(path) for path in files}
 
@@ -129,10 +178,21 @@ def validate_manifest(files: list[Path], target: str = "chrome") -> str:
         gecko = manifest.get("browser_specific_settings", {}).get("gecko", {})
         if not gecko.get("id"):
             raise RuntimeError("Firefox manifest must declare browser_specific_settings.gecko.id")
-        if not gecko.get("strict_min_version"):
+        minimum = gecko.get("strict_min_version")
+        if not minimum:
             raise RuntimeError(
                 "Firefox manifest must declare browser_specific_settings.gecko.strict_min_version"
             )
+        if amo:
+            # AMO 专用的两道闸门：缺 dcp 会被拒签；min 版本低于 140 会让 dcp 变成空头声明。
+            if not (gecko.get("data_collection_permissions") or {}).get("required"):
+                raise RuntimeError(
+                    "AMO target must declare browser_specific_settings.gecko.data_collection_permissions.required"
+                )
+            if _version_tuple(minimum) < _version_tuple(AMO_MIN_VERSION):
+                raise RuntimeError(
+                    f"AMO target requires strict_min_version >= {AMO_MIN_VERSION}, got {minimum}"
+                )
     else:
         referenced = {
             manifest.get("background", {}).get("service_worker"),
@@ -166,15 +226,17 @@ def validate_archive(archive: Path, expected: set[str]) -> None:
         json.loads(package.read("manifest.json").decode("utf-8"))
 
 
-def build(target: str = "chrome") -> Path:
+def build(target: str = "chrome", amo: bool = False) -> Path:
     files = release_files()
-    version = validate_manifest(files, target)
-    # manifest.json 的字节来自目标对应的那一份源文件；其余文件原样读取。
-    manifest_bytes = MANIFEST_SOURCE[target].read_bytes()
+    manifest, manifest_bytes = load_manifest(target, amo)
+    version = validate_manifest(files, target, manifest, MANIFEST_SOURCE[target].name, amo)
     DIST.mkdir(exist_ok=True)
-    archive = DIST / (
-        f"LaterOn-{version}.zip" if target == "chrome" else f"LaterOn-{version}-{target}.zip"
-    )
+    if target == "chrome":
+        archive = DIST / f"LaterOn-{version}.zip"
+    elif amo:
+        archive = DIST / f"LaterOn-{version}-firefox-amo.zip"
+    else:
+        archive = DIST / f"LaterOn-{version}-firefox.zip"
     temporary = archive.with_suffix(".zip.tmp")
 
     try:
@@ -203,18 +265,42 @@ def main() -> int:
         default="chrome",
         help="chrome（默认，用 manifest.json）或 firefox（用 manifest.firefox.json）",
     )
+    parser.add_argument(
+        "--amo",
+        action="store_true",
+        help=(
+            "AMO submission variant: patch gecko in memory with data_collection_permissions "
+            f"and raise strict_min_version to {AMO_MIN_VERSION} (source manifest untouched); "
+            "output is LaterOn-<version>-firefox-amo.zip; firefox target only"
+        ),
+    )
     arguments = parser.parse_args()
 
     try:
-        archive = build(arguments.target)
+        archive = build(arguments.target, arguments.amo)
     except Exception as error:
         print(f"Release build failed: {error}", file=sys.stderr)
         return 1
 
     with zipfile.ZipFile(archive) as package:
         count = len(package.namelist())
+        manifest = json.loads(package.read("manifest.json").decode("utf-8"))
     size_kb = archive.stat().st_size / 1024
-    print(f"Built {archive.relative_to(ROOT)} ({count} files, {size_kb:.1f} KB) [{arguments.target} target]")
+    label = arguments.target + (" + amo-ready" if arguments.amo else "")
+    gecko = manifest.get("browser_specific_settings", {}).get("gecko", {})
+    print(f"Built {archive.relative_to(ROOT)} ({count} files, {size_kb:.1f} KB) [{label} target]")
+    print(
+        "manifest.json: gecko.id={id} strict_min_version={min}{dcp}".format(
+            id=gecko.get("id"),
+            min=gecko.get("strict_min_version"),
+            dcp=(
+                " data_collection_permissions="
+                + json.dumps(gecko.get("data_collection_permissions"), ensure_ascii=False)
+                if "data_collection_permissions" in gecko
+                else " data_collection_permissions=<not declared>"
+            ),
+        )
+    )
     print("Verified: no tests, design drafts, previews, documentation, .DS_Store or icon.svg")
     return 0
 

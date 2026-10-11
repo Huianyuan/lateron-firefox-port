@@ -6,10 +6,11 @@ LaterOn 是一个「项目型网页管理」扩展：把浏览到的网页按项
 | | |
 |---|---|
 | 本版基线 | LaterOn **v1.66.1**（上游 commit `00fde27be93656d650ac5c52adc2684d511adb53`） |
-| 本版形态 | 未签名 XPI（WebExtension，Manifest V3，`strict_min_version: 115.0`） |
+| 本版形态 | 未签名 XPI（WebExtension，Manifest V3），两个变体：**日常版** `strict_min_version: 115.0`；**AMO 签名版** `strict_min_version: 140.0` + `data_collection_permissions: {"required": ["none"]}` |
 | 适配方式 | 用独立清单 `manifest.firefox.json` + 一个转接垫片 `ff-sidebar.js`，**不改 `background.js` 业务逻辑** |
 | 移植前基线 | 原版测试 51/53 通过（2 个上游既有失败，见下）；addons-linter **0 error / 7 warning** |
-| 已实测 | Firefox 157.0.1 真实装载（无头 `web-ext run`）：后台页与 3 个扩展页全部无 JS 报错 |
+| 已实测 | Firefox 157.0.1 真实装载（无头 `web-ext run`）：后台页与 3 个扩展页全部无 JS 报错；两个变体都过 addons-linter **0 error / 7 warning** |
+| 仍需人工 | 7 项必须在有头浏览器里点一遍，逐条脚本见 [`port-docs/UI-人工点验清单.md`](port-docs/UI-人工点验清单.md) |
 
 ---
 
@@ -61,7 +62,7 @@ LaterOn 是一个「项目型网页管理」扩展：把浏览到的网页按项
 | 选项页 | `options_page: "settings.html"` | `options_ui: {page, open_in_tab: true}`（`options_page` 需要 Firefox 126+，`options_ui` 在 115 就能用） |
 | 最低版本 | `minimum_chrome_version: "121"` | 删除；改用 `browser_specific_settings.gecko.strict_min_version: "115.0"` + 固定 add-on ID |
 | 快捷键 | `quick-save` / `toggle-translation` / `save-all-tabs` | 去掉 `toggle-translation`（翻译功能在 Firefox 降级） |
-| 数据收集声明 | 无 | 无（**尚未加** `data_collection_permissions`；这是 AMO 签名提交的硬性要求，自签名/临时装载不受影响） |
+| 数据收集声明 | 无 | **日常构建不带**（`strict_min_version: 115.0`）；**AMO 签名构建带** `"data_collection_permissions": {"required": ["none"]}` 并把 `strict_min_version` 抬到 `140.0`（该键只有 Firefox 140+ 认，详下「方式三」） |
 
 > `sidebar_action`、`commands`（`Alt+1` / `Alt+Shift+1`）、`omnibox`、`web_accessible_resources`、`_locales` 在 addons-linter 下零告警。
 
@@ -73,7 +74,9 @@ LaterOn 是一个「项目型网页管理」扩展：把浏览到的网页按项
 4. `contextMenus` 的 `"action"` 上下文在 Firefox 中的呈现（Firefox 上可能表现为工具栏按钮菜单）。
 5. Trusted Types 站点上 `innerHTML` 的 4 处告警（上游既有代码，非本次引入）。
 6. Firefox MV3 后台是**会被唤醒、回收的事件页**：上游 `background.js` 有若干纯内存集合（如已注入 CSS 的标签页集合），事件页被回收后可能重复注入。本版未改业务逻辑，建议后续单独改成 `storage.session`。
-7. 正式版 Firefox 永久安装需要 AMO 签名（见下）。
+7. 正式版 Firefox 永久安装需要 AMO 签名（见「安装 · 方式三」，签名专用包已内置可一键产出）。
+
+> 上面 1–7 项**不是"还没查"，而是"无头环境查不了"**：它们要么取决于真实的侧栏宽度与渲染，要么取决于真人点击产生的手势与系统级上下文。逐条操作步骤、代码行号、通过判据与记录模板见 [`port-docs/UI-人工点验清单.md`](port-docs/UI-人工点验清单.md)。
 
 ---
 
@@ -99,25 +102,28 @@ LaterOn 是一个「项目型网页管理」扩展：把浏览到的网页按项
 
 ### 方式三：正式版永久安装（需要 AMO 签名）
 
-正式版只认 Mozilla 签名的包，两条路（都需要 Mozilla 账号，且**必须开启 2FA**）：
+正式版只认 Mozilla 签名的包。**不需要手改清单** —— 本仓库的打包脚本已经能直接产出「签名专用包」`dist/LaterOn-1.66.1-firefox-amo.zip`（= Release 附件 `LaterOn-1.66.1-firefox-amo.xpi`，498098 字节），它已声明 `"data_collection_permissions": {"required": ["none"]}` 并把 `strict_min_version` 设为 `140.0`：
 
-- **网页**：<https://addons.mozilla.org/developers/> → 提交新附加组件 → 选 **「On your own / 自托管（unlisted）」** → 上传 `.xpi` → 下载签名的 `.xpi`；
-- **命令行**：
+```bash
+python scripts/build-release.py --target firefox --amo   # → dist/LaterOn-1.66.1-firefox-amo.zip
+```
+
+> 为什么不把 dcp 直接写进 `manifest.firefox.json`？因为该键**只有 Firefox 140+ 才认**，写进主清单就必须放弃 Firefox 115–139 的用户。所以采用「一份源码、两个产物」：日常版保 115，签名版走 140。
+
+两条签名路线（都需要 Mozilla 账号，且**必须开启 2FA**）：
+
+- **网页**：<https://addons.mozilla.org/developers/> → 提交新附加组件 → 选 **「On your own / 自托管（unlisted）」** → 上传 `LaterOn-1.66.1-firefox-amo.xpi` → 下载签名的 `.xpi`；
+- **命令行**（把 `-s` 指向**解包后的 36 文件干净目录**，不要指向仓库根目录，否则 `node_modules` 会被一起打包）：
 
   ```bash
-  npx web-ext sign -s <解包后的36文件目录> -a web-ext-artifacts \
+  unzip -o dist/LaterOn-1.66.1-firefox-amo.zip -d /tmp/lateron-amo
+  npx web-ext sign -s /tmp/lateron-amo -a dist/signed \
       --channel unlisted --api-key <KEY> --api-secret <SECRET>
   ```
 
-  注意 `-s` 必须指向**解包后的干净目录**（36 个文件），不要指向仓库根目录，否则 `node_modules` 会被一起打包。
+  成功后 `dist/signed/` 里会出现已签名的 `.xpi`，可直接在正式版 Firefox 永久安装。扩展 ID 固定为 `lateron-ff-port-695d5826@lhy.local`，**签名后不可更改**。
 
-  另外，**2025-11-03 起 AMO 拒绝没有声明 `browser_specific_settings.gecko.data_collection_permissions` 的新扩展** —— 届时需在 `manifest.firefox.json` 的 `browser_specific_settings.gecko` 里加上：
-
-  ```json
-  "data_collection_permissions": { "required": ["none"] }
-  ```
-
-  （LaterOn 不上传任何用户数据，故为 `none`。加上后本机 addons-linter 结果仍是 0 error，只多一条「该键需要 Firefox 140+」的提示。）
+签名前建议先自查：`npx addons-linter dist/LaterOn-1.66.1-firefox-amo.zip` 应为 **0 error / 7 warning**（那 7 条见下「构建与测试」）。
 
 ---
 
@@ -132,18 +138,28 @@ npm install                 # 只为测试/lint 工具链（jsdom、web-ext、ad
 node tests/<name>.test.js
 
 # 打两种包 → dist/
-python scripts/build-release.py --target firefox   # dist/LaterOn-1.66.1-firefox.zip（= .xpi）
-python scripts/build-release.py --target chrome    # dist/LaterOn-1.66.1.zip
+python scripts/build-release.py                            # dist/LaterOn-1.66.1.zip（Chrome，默认）
+python scripts/build-release.py --target firefox           # dist/LaterOn-1.66.1-firefox.zip（= .xpi，min 115）
+python scripts/build-release.py --target firefox --amo     # dist/LaterOn-1.66.1-firefox-amo.zip（min 140 + dcp，签名用）
 
 # 静态检查 / 真机装载
 npx addons-linter dist/LaterOn-1.66.1-firefox.zip
 npx web-ext run --source-dir <解包目录> --firefox <firefox 可执行文件> --args=-headless
 ```
 
+`--amo` 会走两道额外闸门（缺 `data_collection_permissions`、`strict_min_version < 140.0`、或清单里混入 `side_panel` 等 Chrome 专有键，都会直接构建失败），构建完还会回读归档里的 `manifest.json` 打印 `gecko.id / strict_min_version / data_collection_permissions`。
+
 **基线（上游 v1.66.1，未移植前）**：53 个测试 51 通过、2 个失败：
 `tests/background-modules.test.js`（上游自带的「`background.js` 体积 < 80000 字节」守卫，而它自己有 81138 字节）与 `tests/edit-item.test.js`（「编辑后立刻重画卡片」一项）。这两个失败**上游原本就有**，本版原样保留未修。
 
-**本版结果**：测试仍为 **51/53（与基线逐项一致）**；`addons-linter` **0 error / 7 warning**（1 条缺数据收集声明 + 4 条上游既有 `innerHTML` + 2 条 `sidePanel.setPanelBehavior` 的已知残留，原始 JSON 见 `port-docs/lint-firefox-final.json`）。
+**本版结果**：测试仍为 **51/53（与基线逐项一致，逐项结果见 `port-docs/baseline-amo.csv`）**；
+
+`addons-linter` 两个变体都是 **0 error / 7 warning**：
+
+| 变体 | 7 条 warning 是什么 | 原始报告 |
+|---|---|---|
+| 日常版（min 115） | 1 条未声明数据收集 + 4 条上游既有 `innerHTML`（`content-reading-position.js:124`、`dialog.js:117`、`dialog.js:534`、`picker-ui.js:94`）+ 2 条 `sidePanel.setPanelBehavior` 残留（`background.js:266`、`:268`） | `port-docs/lint-firefox-115.json` |
+| AMO 版（min 140 + dcp） | 未声明数据收集 → 换成 1 条「Android 不支持」（`sidebar_action` 是桌面专有，如实标注）+ 同样 6 条 | `port-docs/lint-firefox-amo.json` |
 
 ---
 
@@ -162,7 +178,7 @@ npx web-ext run --source-dir <解包目录> --firefox <firefox 可执行文件> 
 ├── content-*.js, dialog.js, picker-ui.js, theme.js, boot.js, url-utils.js, tab-navigation.js
 ├── _locales/{en,zh_CN}/       # i18n 资源
 ├── docs/                      # 上游自带截图资源
-├── scripts/build-release.py   # 打包脚本（新增 --target）
+├── scripts/build-release.py   # 打包脚本（--target {chrome,firefox} + --amo）
 ├── tests/                     # 上游自带 53 个测试
 ├── port-docs/                 # ★ 移植文档与实测证据（见下）
 ├── README.upstream.md         # 上游原 README（原样保留）
@@ -173,12 +189,13 @@ npx web-ext run --source-dir <解包目录> --firefox <firefox 可执行文件> 
 
 | 文件 | 内容 |
 |---|---|
-| `Firefox-适配技术方案.md` | **施工级技术方案**（3300+ 行）：可行性论证、逐文件改动设计、12 个清单变体的 addons-linter 实测矩阵、验收清单、附录 F 施工实测记录 |
+| `Firefox-适配技术方案.md` | **施工级技术方案**（3496 行）：可行性论证、逐文件改动设计、12 个清单变体的 addons-linter 实测矩阵、验收清单、附录 **F** 施工实测记录、附录 **G** AMO 签名版（dcp）实现与签名两条路线 |
+| `UI-人工点验清单.md` | **有头人工点验的操作脚本**：附录 F.6 那 7 项逐条给出「为什么无头测不了 / 代码位置 / 操作 / 通过判据 / 失败特征 / 记录字段」，含前置命令与记录模板 |
 | `Firefox-适配方案.md` | 早期可行性分析（工作量与风险清单） |
 | `LaterOn-项目分析.md` | 上游项目结构/架构分析 |
 | `notes-background.md`、`notes-content-scripts.md`、`notes-ui.md`、`notes-firefox-platform.md` | 上游源码阅读笔记 + Firefox 平台差异考证（逐条引用 MDN / BCD / Extension Workshop） |
-| `lint-firefox-final.json` | 本版 XPI 的 addons-linter 原始输出 |
-| `baseline-before.csv`、`baseline-after.csv`、`baseline-before-failures.txt` | 移植前/后的 53 项测试逐项结果对照 |
+| `lint-firefox-final.json`、`lint-firefox-115.json`、`lint-firefox-amo.json` | addons-linter 原始输出（移植完成时 / 日常版 / AMO 签名版） |
+| `baseline-before.csv`、`baseline-after.csv`、`baseline-amo.csv`、`baseline-before-failures.txt` | 移植前 / 移植后 / 加 `--amo` 后的 53 项测试逐项结果对照 |
 
 > 文档路径映射：方案与笔记里写的 `repo/` = 上游原版快照（本仓库不含，可用 `git checkout v1.66.1` 得到），`work/` = 本仓库根目录。
 

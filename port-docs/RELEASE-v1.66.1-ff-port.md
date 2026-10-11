@@ -3,11 +3,14 @@
 基于上游 **LaterOn v1.66.1**（commit `00fde27be93656d650ac5c52adc2684d511adb53`）的 Firefox（Manifest V3）个人移植版。
 **非官方、未获上游授权**（上游无 LICENSE）。仅个人自用，请勿再分发。
 
-## 附件
+## 附件（两个包，按用途选一个）
 
-| 文件 | 大小 | 文件数 | SHA-256 |
-|---|---|---|---|
-| `LaterOn-1.66.1-firefox.xpi` | 498065 字节 | 36 | `F2A5D3CC5F31B08228DF71D18795B0370024FE8993EDD1C49AA268C629423046` |
+| 文件 | 用途 | 大小 | 最低 Firefox | SHA-256 |
+|---|---|---|---|---|
+| `LaterOn-1.66.1-firefox.xpi` | **日常用这个**：`about:debugging` 临时载入 | 498065 字节 | 115 | `F2A5D3CC5F31B08228DF71D18795B0370024FE8993EDD1C49AA268C629423046` |
+| `LaterOn-1.66.1-firefox-amo.xpi` | **提交 AMO 签名用**（已声明 `data_collection_permissions`） | 498098 字节 | 140 | `34B951EA655FCA4819F61078753E3854306C8CB530D8B8DBB67383841F77A698` |
+
+两个包都是 36 个文件，除 `manifest.json` 里的 `strict_min_version` 与 `data_collection_permissions` 外内容完全相同。
 
 > `.xpi` 就是一个 ZIP，可以直接解压查看内容；`manifest.json` 里能看到 Firefox 专用键（`sidebar_action`、`browser_specific_settings.gecko`）。
 
@@ -28,7 +31,10 @@
 ## 永久安装
 
 - **Firefox Developer Edition / ESR**：`about:config` 把 `xpinstall.signatures.required` 设为 `false`，然后拖入 `.xpi` 安装。**Firefox 正式版不支持**这条路（Release/Beta 强制签名校验）。
-- **正式版**：必须将源码提交 AMO 获取签名后安装（Mozilla 账号需开 2FA；2025-11-03 起新扩展还须在清单里声明 `data_collection_permissions`，本包尚未加）。
+- **正式版**：必须走 AMO 签名。用附件里的 `LaterOn-1.66.1-firefox-amo.xpi`（已按 2025-11-03 起的要求声明 `data_collection_permissions: {"required": ["none"]}`），两条路线：
+  - **路线 A（网页）**：<https://addons.mozilla.org/developers/> → 提交新附加组件 → **On your own / unlisted** → 上传该 `.xpi` → 下载已签名包。
+  - **路线 B（命令行）**：把该 `.xpi` 解压成目录后 `web-ext sign --source-dir <目录> --artifacts-dir dist\signed --channel unlisted --api-key <key> --api-secret <secret>`（**不要**直接用仓库根目录当 `--source-dir`，那会把 `node_modules` 打进去）。
+  - **前置条件**：AMO 账号必须已开 **2FA**（否则拿不到 API key）；扩展 ID 已固定为 `lateron-ff-port-695d5826@lhy.local`，签名后不可更改。
 
 ## 本版做了什么
 
@@ -41,9 +47,13 @@
 ## 验证状态
 
 - 上游 53 项测试：**51 通过 / 2 失败**，与移植前基线**逐项一致**（2 个失败是上游自带的既有问题）。
-- `addons-linter`：**0 error / 7 warning**（1 条未声明数据收集 + 4 条上游既有 `innerHTML` + 2 条已知 `sidePanel` 残留）。
+- `addons-linter`（两版都是 **0 error / 7 warning**）：
+  - 日常版：1 条未声明数据收集 + 4 条上游既有 `innerHTML` + 2 条已知 `sidePanel` 残留；
+  - AMO 版：`MISSING_DATA_COLLECTION_PERMISSIONS` 已消除，改为 1 条「Android 不支持」（`sidebar_action` 是桌面专有，如实标注）+ 同样 4 条 + 2 条。
 - 真机实测：Firefox 157.0.1 无头装载成功，后台页与 `sidepanel.html` / `settings.html` / `library.html` 三个扩展页**均无 JS 报错**。
+- 原始报告：`port-docs/lint-firefox-115.json`、`port-docs/lint-firefox-amo.json`；测试逐项结果 `port-docs/baseline-amo.csv`。
 
 ## 已知限制
 
-侧栏内 `close()` 行为、侧栏默认宽度观感、与系统快捷键冲突、`contextMenus` 的 `action` 上下文呈现、Trusted Types 站点上的 4 处 `innerHTML`、以及事件页被回收后可能重复注入 CSS（上游内存态问题）——详见仓库 `README.md` 的「已知限制」。这些均未在真实交互场景中穷尽验证。
+侧栏内 `close()` 行为、侧栏默认宽度观感、与系统快捷键冲突、`contextMenus` 的 `action` 上下文呈现、Trusted Types 站点上的 4 处 `innerHTML`、以及事件页被回收后可能重复注入 CSS（上游内存态问题）——详见仓库 `README.md` 的「已知限制」。
+**这 7 项必须在有头浏览器里由真人点一遍**：逐条操作脚本、通过判据与记录模板见 [`UI-人工点验清单.md`](./UI-人工点验清单.md)，不要只看无头结果就当作验收完毕。

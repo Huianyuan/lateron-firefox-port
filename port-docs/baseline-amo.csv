@@ -1,0 +1,54 @@
+file,exit,tail
+action-sidepanel.test.js,0,PASS Chrome / Edge 工具栏图标统一直接打开侧栏
+archive-search.test.js,0,PASS 归档普通搜索隐藏、归档视图搜索、恢复及侧栏实时归档
+auto-clean.test.js,0,🎉 全部通过
+background-modules.test.js,1,Node.js v22.19.0
+board-order.test.js,0,全部检查通过 🎉
+board-view.test.js,0,全部检查通过 🎉
+card-grid.test.js,0,全部检查通过 🎉
+card-menu.test.js,0,全部通过：没有失败项
+card-order.test.js,0,🎉 全部通过
+cover-pick.test.js,0,🎉 全部通过
+cover-save-failure.test.js,0,PASS 两个界面封面写入失败保留原数据并提示，重试成功后才更新内存
+cover-upload.test.js,0,🎉 全部通过
+delete-item.test.js,0,全部检查通过 🎉
+dialog.test.js,0,全部检查通过 🎉
+douyin-spa.test.js,0,全部通过：56 项通过，0 项失败
+edit-item.test.js,1,有 1 项失败
+filter-sync.test.js,0,全部通过：没有失败项
+folder-manage.test.js,0,全部检查通过 🎉
+folder-overlay.test.js,0,全部检查通过 🎉
+folder-reorder.test.js,0,全部检查通过 🎉
+i18n-onboarding.test.js,0,PASS 英文词典、扩展清单和可重复新手引导均已接入
+item-mutation.test.js,0,PASS 删除原子提交、封面/排序/阅读标记清理、并发添加/修改、失败保留与重试
+library-open-item.test.js,0,全部通过：没有失败项
+library-search.test.js,0,全部检查通过 🎉
+metadata-extract.test.js,0,全部通过：134 项通过，0 项失败
+omnibox-action-state.test.js,0,🎉 全部通过
+omnibox-library-launch.test.js,0,🎉 全部通过
+panel-fast-open.test.js,0,🎉 全部通过
+panel-locate-current.test.js,0,🎉 全部通过
+panel-search.test.js,0,全部检查通过 🎉
+picker-reinjection.test.js,0,PASS 项目选择脚本可在同一网页连续注入两次
+project-archive.test.js,0,✅ 无页面错误
+project-delete.test.js,0,✅ 无页面错误
+project-pin.test.js,0,全部检查通过 🎉
+reading-position-background.test.js,0,🎉 全部通过
+reading-position-content.test.js,0,🎉 全部通过
+save-all-tabs.test.js,0,全部检查通过 🎉
+save-concurrency.test.js,0,PASS 批量期间单篇保存、并发保存/去重、整理删除、两批并发、自动清理并发和失败恢复
+save-single-page.test.js,0,全部检查通过 🎉
+select-mode.test.js,0,全部检查通过 🎉
+settings-navigation.test.js,0,全部通过：没有失败项
+shortcut-config.test.js,0,PASS 收藏当前窗口所有标签页快捷键统一为 Alt+Shift+1
+sidepanel-card-order.test.js,0,PASS 侧栏卡片可上下拖拽并与全屏共享自定义顺序
+sidepanel-delete.test.js,0,PASS 侧栏删除必须加载确认框、加载失败/取消不删除、确认后提交并清理封面
+sidepanel-fullscreen-context.test.js,0,PASS 侧栏展开全屏会同步项目、筛选和正在阅读位置，普通入口仍回首页
+sidepanel-link-actions.test.js,0,PASS 侧栏支持修饰键新标签与统一的三项右键菜单
+sidepanel-project-visible.test.js,0,PASS 侧栏当前项目左右定位、可见时保持位置及边界处理
+sidepanel-three-state.test.js,0,全部通过：没有失败项
+tab-reuse.test.js,0,PASS 已打开页面会被复用并聚焦其窗口
+theme-sync.test.js,0,全部通过：没有失败项
+three-state.test.js,0,全部通过：没有失败项
+topbook-modal.test.js,0,结果：20 通过，0 失败
+url-utils.test.js,0,PASS shared URL normalization including YouTube video identity

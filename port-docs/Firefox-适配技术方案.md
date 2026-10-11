@@ -3368,3 +3368,129 @@ Remove-Item -Recurse -Force "$base\work"; # 然后重跑 D.2
 ### F.7 施工副产物（后续维护建议）
 
 无头实测时观察到一个副作用：Firefox 的 MV3 后台是**事件页，会被扩展页的消息随时唤醒并重新执行顶层脚本**；本次探针在每次唤醒时又去开 3 个标签，于是自我放大成数百次唤醒。这提醒了一件事：**`background.js` 不得依赖纯内存状态**。上游确实有内存集合（如 `injectedCssTabs`、抖音 settle 计时器），事件页被回收后这些状态会丢，可能导致重复 `insertCSS`。本次适配按"不改业务逻辑"的边界**没有动它**，建议后续单独提一个补丁把它们改为 `chrome.storage.session` 持久化。
+
+---
+
+## 附录 G · AMO 签名版（dcp）与人工点验清单（第五棒补充）
+
+### G.1 背景：为什么必须单独产出一个"能过 AMO 审核"的副本
+
+- **2025-11-03 起**，新扩展提交到 `addons.mozilla.org` 时，**必须在 manifest 里声明 `browser_specific_settings.gecko.data_collection_permissions`**，否则签名提交会被直接拒绝（[Mozilla 公告](https://blog.mozilla.org/addons/2025/10/23/data-collection-consent-changes-for-new-firefox-extensions/)）。
+- 但 `data_collection_permissions` **只有 Firefox 140+ 才认**（[Mozilla Discourse](https://discourse.mozilla.org/t/possible-issue-with-new-data-collection-permissions-soon-to-be-required/146829)）→ 一旦把它写进主 manifest，`strict_min_version` 就得抬到 `140.0`，会**丢掉 Firefox 115–139 的用户**。
+- 因此这里**不动 `manifest.firefox.json`**，改为给构建脚本加 `--amo` 开关，在内存里打补丁：同一份源码产出两个产物。
+
+| 产物 | 用途 | `strict_min_version` | dcp | 文件 |
+|---|---|---|---|---|
+| 直装版 | GitHub Release 下载、`about:debugging` 临时装载 | `115.0` | 无 | `dist/LaterOn-1.66.1-firefox.xpi` |
+| AMO 版 | 上传 AMO 签名 / 自托管签名 | `140.0` | `{"required": ["none"]}` | `dist/LaterOn-1.66.1-firefox-amo.xpi` |
+| Chrome 版 | 对照与回归 | — | — | `dist/LaterOn-1.66.1-chrome.zip` |
+
+`{"required": ["none"]}` 的语义是**本扩展不收集任何数据**：LaterOn 无后端、无遥测，实测唯一的一次 `fetch` 指向用户当前页面自身的 URL。
+
+### G.2 `scripts/build-release.py` 改动清单
+
+| 位置 | 改动 |
+|---|---|
+| 模块 docstring | 写入三条构建命令的用法 |
+| 常量 | `AMO_MIN_VERSION = "140.0"`、`DATA_COLLECTION_PERMISSIONS = {"required": ["none"]}` |
+| `load_manifest(target: str, amo: bool = False) -> tuple[dict, bytes]` | 新增；`amo=True` 时在内存补 `gecko.data_collection_permissions` 并抬 `gecko.strict_min_version`，`json.dumps(..., ensure_ascii=False, indent=2) + "\n"` |
+| `_version_tuple(value: str) -> tuple[int, ...]` | 新增；版本号比较 |
+| `validate_manifest(files: list[Path], target: str, manifest: dict, source_name: str, amo: bool = False) -> str` | 签名扩展：原 FF 校验（引用文件、Chrome 专有键、`gecko.id`、`strict_min_version`）保留，新增 amo 两道闸门 |
+| `build(target: str = "chrome", amo: bool = False) -> Path` | 输出名分叉：chrome→`LaterOn-<v>.zip`、firefox→`LaterOn-<v>-firefox.zip`、amo→`LaterOn-<v>-firefox-amo.zip` |
+| CLI | 新增 `--amo`（`action="store_true"`） |
+| 打印 | 新增的输出与异常文本**一律 ASCII**，避免 cp936 控制台乱码 |
+
+### G.3 三条构建命令
+
+```powershell
+cd F:\ALL_AI\小助理\open-source-collection\lateron-firefox-port\work
+D:\ALL_Python\python312\python312.exe scripts\build-release.py                            # Chrome 版      dist/LaterOn-1.66.1.zip
+D:\ALL_Python\python312\python312.exe scripts\build-release.py --target firefox            # Firefox 直装版 dist/LaterOn-1.66.1-firefox.zip
+D:\ALL_Python\python312\python312.exe scripts\build-release.py --target firefox --amo      # AMO 签名版     dist/LaterOn-1.66.1-firefox-amo.zip
+```
+
+### G.4 实测：产物与哈希
+
+| 产物 | 文件数 | 字节 | SHA256 |
+|---|---|---|---|
+| Chrome 版 | 36 | 497984 | `CD72FF72CD14A8C67A8169E4BBF64E4DADDF865E1CD10E2A560409AB30582453` |
+| Firefox 直装版 | 36 | 498065 | `F2A5D3CC5F31B08228DF71D18795B0370024FE8993EDD1C49AA268C629423046` |
+| Firefox AMO 版 | 36 | 498098 | `34B951EA655FCA4819F61078753E3854306C8CB530D8B8DBB67383841F77A698` |
+
+- **确定性**：AMO 版连续两次构建哈希相同（脚本给归档写固定时间戳）。
+- **无污染**：改动脚本后重建的 Chrome 版与 Firefox 直装版，与改动前**已发布**的那两个文件**逐字节一致** → 本次改动是纯增量。
+
+### G.5 实测：addons-linter 10.14.0 对照
+
+| 版本 | errors | warnings | 明细 |
+|---|---|---|---|
+| Firefox 直装版（115，无 dcp） | 0 | 7 | `MISSING_DATA_COLLECTION_PERMISSIONS` + 4×`UNSAFE_VAR_ASSIGNMENT`（`content-reading-position.js:124`、`dialog.js:117`、`dialog.js:534`、`picker-ui.js:94`）+ 2×`UNSUPPORTED_API sidePanel.setPanelBehavior`（`background.js:266`、`:268`） |
+| Firefox AMO 版（140 + dcp） | 0 | 7 | `KEY_FIREFOX_ANDROID_UNSUPPORTED_BY_MIN_VERSION`（`sidebar_action` 是桌面专有，min 抬到 140 后被标记）+ 同上 6 条 |
+
+即：**提请签名必须解决的那条 `MISSING_DATA_COLLECTION_PERMISSIONS` 已消除**，代价是把 `Android 不适配` 作为已知事实显式写进 manifest。原始 JSON 存 `work/lint-firefox-115.json`、`work/lint-firefox-amo.json`。
+
+### G.6 实测：AMO 两道闸门自测
+
+用临时脚本直接调用 `validate_manifest` / `load_manifest`（脚本已删）：
+
+| 用例 | 结果 |
+|---|---|
+| 声明 dcp 缺失 | `BLOCKED -> AMO target must declare browser_specific_settings.gecko.data_collection_permissions.required` |
+| `strict_min_version` 低于 140 | `BLOCKED -> AMO target requires strict_min_version >= 140.0, got 115.0` |
+| 正常 AMO 配置 | `PASS` |
+| Firefox manifest 里混入 `side_panel` | `BLOCKED -> Firefox manifest must not contain Chrome-only keys: side_panel` |
+
+### G.7 实测：全量回归测试
+
+53 个测试文件逐个跑（`node tests/<file>.test.js`）：**51 通过 / 2 失败**，失败的两个是**上游既有失败**，与本次移植无关：
+
+- `tests/background-modules.test.js`：断言 `background.js < 80000` 字节，而 v1.66.1 上游文件本身是 81138 字节（上游自带的体积守卫已经红）。
+- `tests/edit-item.test.js`：1 项「编辑后立刻重画卡片（不等存储广播）」失败，其余全绿。
+
+结果 CSV：`work/baseline-amo.csv`（施工前基线 `work/baseline-before.csv` 同为这两个失败）。
+
+### G.8 人工点验清单（附录 F.6 七项的可执行版）
+
+见同目录 **[`UI-人工点验清单.md`](./UI-人工点验清单.md)**：含三类"无头测不了"的原因、前置准备命令（有头 `web-ext run`，去掉 `--args=-headless`）、A-01~A-07 逐条的「为什么 / 代码位置 / 操作 / 通过判据 / 失败特征 / 记录字段」、以及结论与记录模板。
+
+### G.9 AMO 签名步骤
+
+**前置条件**（三条都必需）：
+
+1. AMO 账号已开启 **2FA**（2021-03-15 起强制，未开无法登录开发者后台、也无法生成 API key）；
+2. 包内 manifest 已声明 `data_collection_permissions`（= 用本附录的 AMO 版）；
+3. 有**固定且永久**的扩展 ID（本项目为 `lateron-ff-port-695d5826@lhy.local`）——签名后不可更改。
+
+**路线 A · 网页上传**
+
+1. 打开 <https://addons.mozilla.org/developers/> 并用已开 2FA 的账号登录；
+2. 「提交新附加组件」→ 选择 **On your own / unlisted**（自托管，不上架公开目录）；
+3. 上传 `dist/LaterOn-1.66.1-firefox-amo.xpi`；
+4. 等待自动签名完成，从提交页下载**已签名的 xpi**（文件名形如 `lateron-ff-port-...xpi`）；
+5. 装法：`about:config` 里把 `xpinstall.signatures.required` 设为 `false`（仅 Nightly/Developer Edition 可靠），或直接用「从文件安装」装已签名包——已签名包在正式版也可永久安装。
+
+**路线 B · 命令行 `web-ext sign`**（本机 web-ext 8.10.0 实测支持这些参数）
+
+```powershell
+cd F:\ALL_AI\小助理\open-source-collection\lateron-firefox-port\work
+# 1) 先把 AMO 版解包成干净目录（36 文件；不要 -s work，否则 node_modules 会被打包）
+D:\ALL_Python\python312\python312.exe scripts\build-release.py --target firefox --amo
+$dst = "$env:TEMP\latoron-ff-amo"; Remove-Item $dst -Recurse -Force -ErrorAction SilentlyContinue
+Expand-Archive "dist\LaterOn-1.66.1-firefox-amo.zip" $dst
+
+# 2) 填自己的 API key/secret（AMO → 工具 → 管理 API 密钥），走自托管通道
+& "node_modules\.bin\web-ext.cmd" sign `
+  --source-dir $dst `
+  --artifacts-dir "dist\signed" `
+  --channel unlisted `
+  --api-key "<你的 JWT issuer>" `
+  --api-secret "<你的 JWT secret>"
+```
+
+- 常用参数：`-s/--source-dir`、`-a/--artifacts-dir`、`--channel listed|unlisted`、`--api-key`、`--api-secret`、`--amo-base-url`（默认 `https://addons.mozilla.org/api/v5/`）、`--approval-timeout`、`--upload-source-code`、`--ignore-files`。
+- 成功后在 `dist\signed\` 得到 `<id>-<version>.xpi`（已签名），可直接在正式版 Firefox 里永久安装。
+
+### G.10 本轮仍未做
+
+- **没有真的把包上传到 AMO**：需要账号 2FA 与 API key（等用户提供/自行执行），且这是不可逆的对外动作，应由用户确认后执行。
+- **A-01~A-07 的有头人工点验未做**：需要真实 GUI 会话与真人点击，按 `UI-人工点验清单.md` 执行。
