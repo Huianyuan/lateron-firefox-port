@@ -47,6 +47,18 @@ vm.runInContext(navigationSource, context, { filename: "tab-navigation.js" });
   const excluded = await context.LaterOnTabs.findOpen("https://example.com/article?a=1", { excludeTabId: 2 });
   assert.strictEqual(excluded, null, "全屏收藏库可排除自身标签页");
 
+  tabs.push({ id: 4, windowId: 10, active: true, url: "https://www.youtube.com/watch?v=ss-ufzKALnI&list=WL&index=23&t=15s" });
+  tabs.push({ id: 5, windowId: 20, active: false, url: "https://www.youtube.com/watch?v=SS-ufzKALnI" });
+  for (const target of ["https://youtu.be/ss-ufzKALnI?si=shared", "https://www.youtube.com/watch?v=ss-ufzKALnI"]) {
+    for (let click = 0; click < 3; click++) {
+      const videoTab = await context.LaterOnTabs.findOpen(target);
+      assert.strictEqual(videoTab?.id, 4, "重复点击同一视频应复用当前标签页，忽略时间和播放列表参数");
+      await context.LaterOnTabs.activate(videoTab);
+      assert.strictEqual(tabUpdates.at(-1).id, 4);
+    }
+  }
+  assert.strictEqual((await context.LaterOnTabs.findOpen("https://youtu.be/SS-ufzKALnI"))?.id, 5, "不同视频不能误复用");
+
   assert.match(librarySource, /LaterOnTabs\.findOpen\(target, \{ excludeTabId: libraryTabId \}\)/);
   assert.match(sidepanelSource, /LaterOnTabs\.findOpen\(target\)/);
   console.log("PASS 已打开页面会被复用并聚焦其窗口");

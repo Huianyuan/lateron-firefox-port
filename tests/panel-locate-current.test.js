@@ -330,6 +330,19 @@ function bigStore(currentIndex, overrides = {}) {
   await tick(150);
   check("真正切换标签后仍能定位项目内网页", envRace.store.laterOnActiveProject === "work" && envRace.isHighlighted("work-new"));
 
+  const envVideo = boot({
+    store: {
+      laterOnItems: [makeItem({ id: "video", projectId: "video-project", url: "https://youtu.be/ss-ufzKALnI?si=saved" })],
+      laterOnProjects: [{ id: "video-project", name: "视频" }],
+      laterOnActiveProject: "unfiled", laterOnSettings: {}, laterOnCovers: {}
+    },
+    activeTab: { id: 20, windowId: 7, active: true, url: "https://www.youtube.com/watch?v=ss-ufzKALnI&list=WL&index=23&t=15s" }
+  });
+  await tick(350);
+  check("YouTube 短链接与播放列表网址能定位同一已添加视频", envVideo.store.laterOnActiveProject === "video-project" && envVideo.isHighlighted("video"));
+  const videoSave = envVideo.document.querySelector("#saveCurrent");
+  check("已打开的同一 YouTube 视频显示已添加而不是添加", videoSave.disabled && videoSave.classList.contains("saved"));
+
   // ═══ ⑧ 侧栏拖宽 / 顶部栏变高后仍然不会遮住卡片 ═══
   console.log("\n── ⑧ 顶部吸顶区变高 → 按实际可见区域重新居中 ──");
   const wideStickyBottom = 96;
