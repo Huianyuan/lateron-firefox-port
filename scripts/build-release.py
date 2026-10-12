@@ -34,10 +34,12 @@ MANIFEST_SOURCE = {
 AMO_MIN_VERSION = "140.0"
 DATA_COLLECTION_PERMISSIONS = {"required": ["none"]}
 
-# Only files required by the installed extension belong in a release package.
-# Keep this list explicit: adding a test, screenshot, design draft or document to
-# the repository must never make it into a user's extension by accident.
+# Only extension runtime files and the required license notice belong in a release
+# package. Keep this list explicit: adding a test, screenshot, design draft or
+# document to the repository must never make it into a user's extension by accident.
+# LICENSE 自上游 a1a5313 起必须随包分发（MIT 要求分发时保留版权声明与协议全文）。
 RUNTIME_FILES = (
+    "LICENSE",
     "manifest.json",
     "article-cover-placeholder.png",
     "background.js",
