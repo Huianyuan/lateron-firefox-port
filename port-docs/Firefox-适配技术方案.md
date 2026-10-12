@@ -3608,4 +3608,72 @@ git merge --no-ff FETCH_HEAD -m "Merge upstream a1a5313: LaterOn 改为 MIT 协�
 
 - **没有真的把包上传到 AMO 签名**（同上 G.10：需要账号 2FA 与 API key，且是不可逆的对外动作）。
 - **A-01~A-07 的有头人工点验未做**（按 `UI-人工点验清单.md` 执行）。
-- **「社区版 vs 官方版」的区分只做到文字层面**：扩展显示名仍是上游的 `LaterOn · 项目型网页管理`（`_locales/*/messages.json` 的 `extensionName` 未改）。上游 README 的协议要求是「注明原项目与修改内容、区分社区版与官方版」，本仓库已在 README/Release 层面显著标注，但**扩展自身界面尚未改名**；若要彻底区隔，需改 `extensionName` 并重打包（会影响三个产物的哈希）。
+- **「社区版 vs 官方版」的区分只做到文字层面**：扩展显示名仍是上游的 `LaterOn · 项目型网页管理`（`_locales/*/messages.json` 的 `extensionName` 未改）。**（2026-10-12 第八棒已改名，见附录 I）**上游 README 的协议要求是「注明原项目与修改内容、区分社区版与官方版」，本仓库已在 README/Release 层面显著标注，但**扩展自身界面尚未改名**；若要彻底区隔，需改 `extensionName` 并重打包（会影响三个产物的哈希）。
+
+---
+
+## 附录 I · 改名（社区版区隔）与重打包（2026-10-12 第八棒）
+
+### I.1 为什么必须改名
+
+上游 README 的「开源协议」章节（`a1a5313` 引入）对社区移植版提出两条要求：**注明原项目与修改内容**、**区分社区版与官方版**。本仓库此前只在 README / Release / 仓库描述层面区分，**扩展自身安装后显示的仍是最初的 `LaterOn · 项目型网页管理`** —— 用户下载安装后看到的与官方发布版一模一样，"文档层面的区分 ≠ 用户可见层面的区分"。用户于 2026-10-12 拍板执行改名。
+
+时间顺序是硬约束：**签名包改一个字节即失效**，而 AMO 签名尚未进行，因此改名必须现在做、且做完后重新产出待签名包。
+
+### I.2 定名与逐处改动
+
+改动只落在两份 locale 文件，共 6 处（每份 3 处）：
+
+| 文件 | 键 | 改前 | 改后（现行） |
+|---|---|---|---|
+| `_locales/zh_CN/messages.json` | `extensionName.message` | `LaterOn · 项目型网页管理` | **`LaterOn 社区移植版 · 项目型网页管理`** |
+| `_locales/en/messages.json` | `extensionName.message` | `LaterOn · Project Web Manager` | **`LaterOn Community Port · Project Web Manager`** |
+| 两份 | `actionTitle.message` | `打开 LaterOn 侧栏` / `Open the LaterOn side panel` | **`打开 LaterOn 社区移植版侧栏`** / **`Open the LaterOn Community Port side panel`** |
+| 两份 | `extensionDescription.message` | 上游原文 | 末尾追加「基于 gaoyiiiii/LaterOn 的非官方 Firefox 移植版（MIT 许可）。」/「 Unofficial Firefox port of gaoyiiiii/Lateron (MIT).」 |
+
+命名取舍：英文用 **Community Port**（而不是 `Edition`/`Fork`），直白表明这是非官方社区移植；中文用 **社区移植版**；`actionTitle` 与 `extensionDescription` 同步带上归属声明，这样**在安装提示、附加组件管理器列表、右键工具栏按钮三处都看得到"这是非官方移植"**。
+
+### I.3 连带改动：上游测试里写死的旧显示名
+
+`tests/i18n-onboarding.test.js` 的断言把旧显示名写成了字面量常量：
+
+```js
+// 改前
+assert.equal(zh.extensionName.message, "LaterOn · 项目型网页管理");
+```
+
+改名后该测试必然失败，因此同步改成新名并加注释说明原因。**这是本移植版第一次修改上游测试文件**，改动量压到最小（只改期望字符串，不动断言结构），并在提交信息与文档里如实登记，避免被误读为"为了过测试而改测试"。
+
+### I.4 重打包与现行哈希（**旧的三个哈希全部作废**）
+
+```powershell
+cd "$topic\work"
+& "D:\ALL_Python\python312\python312.exe" "scriptsuild-release.py" --target chrome
+& "D:\ALL_Python\python312\python312.exe" "scriptsuild-release.py" --target firefox
+& "D:\ALL_Python\python312\python312.exe" "scriptsuild-release.py" --target firefox --amo
+```
+
+| 产物 | 改名后 | 改名前的作废值 |
+|---|---|---|
+| Firefox 直装 `LaterOn-1.66.1-firefox.zip` | **498891 字节** / SHA256 `CFE6333D43398E424CCABE57CAF42D2458F9D107D64BE971E182038EC0F49F5F` | 498779 / `C826F4F4…9C9E`… 见附录 H.4 |
+| Firefox AMO `LaterOn-1.66.1-firefox-amo.zip` | **498924 字节** / SHA256 `4B2674AAC5DB40225E7AEFCF3531CE18292BB82E11E0F5034793A509A3BDF8B6` | 498812 / `6DCA6DEC…9C9E` |
+| Chrome 对照 `LaterOn-1.66.1.zip` | **498810 字节** / SHA256 `D2A105774B6252AD663B9866392614091761D3D09544572E591E2378BA788C90` | 498698 / `FDBC9C0C…4444` |
+
+三个包仍是 **37 文件**（白名单不变），只是内容变化。包内复核：`LICENSE` 在、**均无 `META-INF/`（未签名）**、两份 locale 已是新值；两个 Firefox 包的 `gecko` 段只在 `strict_min_version`/`data_collection_permissions` 上区分（115.0 与 140.0 + `{"required":["none"]}`），**`gecko.id` 未动**（`lateron-ff-port-695d5826@lhy.local`）—— 这点很重要：换 ID 会让 AMO 视为另一个扩展，改名不需要换 ID。
+
+### I.5 回归与静态检查（**没有引入新问题**）
+
+- 53 项测试：**51/53**，失败仍是上游 v1.66.1 自带的 `tests/background-modules.test.js`（`background.js` 体积断言）与 `tests/edit-item.test.js`；被同步改过的 `tests/i18n-onboarding.test.js` 已转绿。逐项结果：`work/baseline-rename.csv`。
+- addons-linter 两个 Firefox 变体：**errors 0 / warnings 7 / notices 0**，与改名前的 7 条**逐条相同**（115 版 = `MISSING_DATA_COLLECTION_PERMISSIONS` + 4×`UNSAFE_VAR_ASSIGNMENT` + 2×`UNSUPPORTED_API sidePanel.setPanelBehavior`；AMO 版把第一条换成 `KEY_FIREFOX_ANDROID_UNSUPPORTED_BY_MIN_VERSION`）。原始 JSON：`work/lint-firefox-115.json`、`work/lint-firefox-amo.json`。
+
+### I.6 提交与发布面
+
+- 提交 **`bd64e7d`**「改名：扩展显示名区分社区版与官方版」（3 文件 / +9 −7）。
+- 相对上游 `a1a5313` 的差异面：**移植代码 13 文件 / +518 −51**（含 `ff-sidebar.js` 新增 127 行、`manifest.firefox.json` 新增 92 行、两份 locale、被同步的上游测试）；含仓务文件（`.gitattributes`、`.gitignore`、`README.md`、`README.upstream.md`、`package.json`、`package-lock.json`）= 19 文件 / +6458 −110，其中 `package-lock.json` 占 5641 行工具链噪声。**`background.js` 依旧一字未改**。
+- Release 两个附件替换为改名后的包（大小/哈希见 I.4；正文同步）；文档面同步：本 README 八阶段表新增 ⑧、`AMO签名操作指南.md` §4 由"可选改名"改为"已完成"并更新全部哈希、本节即文档侧登记。
+
+### I.7 本轮仍未做
+
+- **AMO 上传签名仍未执行**（需账号 2FA + API key，是不可逆的对外动作，等用户执行/确认；步骤见 `AMO签名操作指南.md`）。
+- **A-01~A-07 有头人工点验仍未做**（`UI-人工点验清单.md`）。
+- 改名后仍存在的能力取舍：**FF 115–139 用户无法使用永久安装**（AMO 签名版必须 min 140 + dcp），直装版永远只能临时装载 —— 这是 dcp 政策带来的，不是本次改名引入的。

@@ -7,12 +7,12 @@
 
 | 文件 | 用途 | 大小 | 最低 Firefox | SHA-256 |
 |---|---|---|---|---|
-| `LaterOn-1.66.1-firefox.xpi` | **日常用这个**：`about:debugging` 临时载入 | 498779 字节 | 115 | `C826F4F41508CB444BAC53454543D04E0B21B36A788C133756BFC5D16C5B19C8` |
-| `LaterOn-1.66.1-firefox-amo.xpi` | **提交 AMO 签名用**（已声明 `data_collection_permissions`） | 498812 字节 | 140 | `6DCA6DEC48AB4FA3AFCE8DC316173DFA6069115D9E0D5FC82F455D79A6909C9E` |
+| `LaterOn-1.66.1-firefox.xpi` | **日常用这个**：`about:debugging` 临时载入 | 498891 字节 | 115 | `CFE6333D43398E424CCABE57CAF42D2458F9D107D64BE971E182038EC0F49F5F` |
+| `LaterOn-1.66.1-firefox-amo.xpi` | **提交 AMO 签名用**（已声明 `data_collection_permissions`） | 498924 字节 | 140 | `4B2674AAC5DB40225E7AEFCF3531CE18292BB82E11E0F5034793A509A3BDF8B6` |
 
-两个包都是 **37 个文件**（含上游 `LICENSE`），除 `manifest.json` 里的 `strict_min_version` 与 `data_collection_permissions` 外内容完全相同。
+两个包都是 **37 个文件**（含上游 `LICENSE`），除 `manifest.json` 里的 `strict_min_version` 与 `data_collection_permissions` 外内容完全相同；扩展显示名为 **`LaterOn 社区移植版 · 项目型网页管理`**（英文界面为 `LaterOn Community Port · Project Web Manager`），与上游官方版区分。
 
-> 2026-10-12 因上游改为 MIT 协议（提交 `a1a5313`）重新打包：文件数 36 → 37，两个附件均已**替换**，旧的大小与哈希已作废。
+> 2026-10-12 两轮重打包：① 因上游改为 MIT 协议（提交 `a1a5313`）加 `LICENSE`，文件数 36 → 37；② 因**改名**（提交 `bd64e7d`，第八棒）内容变化。两次都**替换**了附件，**旧的大小与哈希全部作废**（含 498779 / `C826F4F4…19C8`、498812 / `6DCA6DEC…9C9E`）。
 
 > `.xpi` 就是一个 ZIP，可以直接解压查看内容；`manifest.json` 里能看到 Firefox 专用键（`sidebar_action`、`browser_specific_settings.gecko`）。
 
@@ -24,7 +24,7 @@
 2. Firefox 地址栏输入 `about:debugging#/runtime/this-firefox` 回车。
 3. 点 **「临时载入附加组件…」**（Load Temporary Add-on…）。
 4. 在弹出的文件选择框里，进入刚才的解压目录，选中 **`manifest.json`** 并打开。
-5. 列表里出现 `LaterOn`（ID `lateron-ff-port-695d5826@lhy.local`）即装载成功。
+5. 列表里出现 `LaterOn 社区移植版 · 项目型网页管理`（ID `lateron-ff-port-695d5826@lhy.local`）即装载成功。
 6. 点工具栏的 LaterOn 图标 → 右侧弹出侧栏即为正常（若图标没显示，点扩展菜单的拼图图标把 LaterOn 固定到工具栏）。
 7. 验证通过后，可以打开 `about:addons` → 扩展 → LaterOn 查看权限与选项页。
 
@@ -37,7 +37,7 @@
   - **路线 A（网页）**：<https://addons.mozilla.org/developers/> → 提交新附加组件 → **On your own / unlisted** → 上传该 `.xpi` → 下载已签名包。
   - **路线 B（命令行）**：把该 `.xpi` 解压成目录后 `web-ext sign --source-dir <目录> --artifacts-dir dist\signed --channel unlisted --api-key <key> --api-secret <secret>`（**不要**直接用仓库根目录当 `--source-dir`，那会把 `node_modules` 打进去）。
   - **前置条件**：AMO 账号必须已开 **2FA**（否则拿不到 API key）；扩展 ID 已固定为 `lateron-ff-port-695d5826@lhy.local`，签名后不可更改。
-  - **逐步照做版**：[`port-docs/AMO签名操作指南.md`](./AMO签名操作指南.md) —— 从注册 2FA、取 API key、准备 37 文件源目录、改名（**必须在签名之前**）、两条签名路线，到用 `META-INF/mozilla.rsa` 校验签名、替换本 Release 附件、故障排查表，一页一命令。
+  - **逐步照做版**：[`port-docs/AMO签名操作指南.md`](./AMO签名操作指南.md) —— 从注册 2FA、取 API key、准备 37 文件源目录、改名（**已于第八棒完成**）、两条签名路线，到用 `META-INF/mozilla.rsa` 校验签名、替换本 Release 附件、故障排查表，一页一命令。
   - **注意**：签名包**改一个字节即失效**；本 Release 目前两个附件**都还没有签名块**，所以正式版只能临时装载或自己签一遍。
 
 ## 本版做了什么
@@ -55,7 +55,7 @@
   - 日常版：1 条未声明数据收集 + 4 条上游既有 `innerHTML` + 2 条已知 `sidePanel` 残留；
   - AMO 版：`MISSING_DATA_COLLECTION_PERMISSIONS` 已消除，改为 1 条「Android 不支持」（`sidebar_action` 是桌面专有，如实标注）+ 同样 4 条 + 2 条。
 - 真机实测：Firefox 157.0.1 无头装载成功，后台页与 `sidepanel.html` / `settings.html` / `library.html` 三个扩展页**均无 JS 报错**。
-- 原始报告：`port-docs/lint-firefox-115.json`、`port-docs/lint-firefox-amo.json`；测试逐项结果 `port-docs/baseline-amo.csv`。
+- 原始报告：`port-docs/lint-firefox-115.json`、`port-docs/lint-firefox-amo.json`（**均为改名后重跑**，两版仍是 0 error / 7 warning，告警条目与改名前逐条相同）；测试逐项结果 `port-docs/baseline-amo.csv`、改名后 `port-docs/baseline-rename.csv`。
 
 ## 已知限制
 

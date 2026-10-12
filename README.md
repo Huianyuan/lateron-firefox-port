@@ -6,7 +6,7 @@ LaterOn 是一个「项目型网页管理」扩展：把浏览到的网页按项
 | | |
 |---|---|
 | 本版基线 | LaterOn **v1.66.1**（上游 commit `00fde27be93656d650ac5c52adc2684d511adb53`）+ 上游 **`a1a5313`**（2026-10-12 采纳 MIT、打包含 LICENSE，已 merge 进本仓库） |
-| 本版形态 | 未签名 XPI（WebExtension，Manifest V3），两个变体：**日常版** `strict_min_version: 115.0`；**AMO 签名版** `strict_min_version: 140.0` + `data_collection_permissions: {"required": ["none"]}` |
+| 本版形态 | 未签名 XPI（WebExtension，Manifest V3），两个变体：**日常版** `strict_min_version: 115.0`；**AMO 签名版** `strict_min_version: 140.0` + `data_collection_permissions: {"required": ["none"]}`。两个变体的扩展显示名都是 **`LaterOn 社区移植版 · 项目型网页管理`**（zh_CN）/ **`LaterOn Community Port · Project Web Manager`**（en），与上游官方版在用户可见层面区分开 |
 | 适配方式 | 用独立清单 `manifest.firefox.json` + 一个转接垫片 `ff-sidebar.js`，**不改 `background.js` 业务逻辑** |
 | 移植前基线 | 原版测试 51/53 通过（2 个上游既有失败，见下）；addons-linter **0 error / 7 warning** |
 | 已实测 | Firefox 157.0.1 真实装载（无头 `web-ext run`）：后台页与 3 个扩展页全部无 JS 报错；两个变体都过 addons-linter **0 error / 7 warning** |
@@ -28,12 +28,12 @@ LaterOn 是一个「项目型网页管理」扩展：把浏览到的网页按项
 
 ## 与原版的差异
 
-一句话：**运行时逻辑一致，只做「浏览器 API 与清单」层面的适配**。业务功能、界面、存储结构、i18n 文案键位全部保持原样，因此两版可以共用同一份用户数据。
+一句话：**运行时逻辑一致，只做「浏览器 API 与清单」层面的适配**。业务功能、界面、存储结构全部保持原样，i18n **键位**也与上游完全一致（只改了显示名/描述的**文案值**），因此两版可以共用同一份用户数据。
 
 ### 差异总览
 
-- **改动 8 个既有文件**，新增 7 项（`ff-sidebar.js`、`manifest.firefox.json`、`package.json`、`package-lock.json`、`README.upstream.md`、`port-docs/`、`LICENSE` —— `LICENSE` 来自上游 `a1a5313`，不是本次移植写的）。
-- **移植代码改动面**（对当前上游 `a1a5313`，不含对外 README 与工具链）：**10 文件 / +509 −44**，其中新增 2 个文件（`ff-sidebar.js` 127 行、`manifest.firefox.json` 92 行）。**`background.js` 一个字节都没改**（上游最大的文件，1706 行）——Firefox 侧的兼容靠垫片在运行前注入，而不是改业务代码。
+- **改动 8 个既有文件**（`library.js`、`sidepanel.js`、`settings.js`、`i18n.js`、`sidepanel.html`、`library.html`、`settings.html`、`scripts/build-release.py`）；2026-10-12 第八棒改名又动了 3 个既有文件（`_locales/zh_CN/messages.json`、`_locales/en/messages.json`、`tests/i18n-onboarding.test.js`）⇒ 合计 **11 个既有文件**。新增 7 项（`ff-sidebar.js`、`manifest.firefox.json`、`package.json`、`package-lock.json`、`README.upstream.md`、`port-docs/`、`LICENSE` —— `LICENSE` 来自上游 `a1a5313`，不是本次移植写的）。
+- **移植代码改动面**（对当前上游 `a1a5313`，不含对外 README 与工具链）：**13 文件 / +518 −51**（含第八棒改名的 3 个文件：+9 −7），其中新增 2 个文件（`ff-sidebar.js` 127 行、`manifest.firefox.json` 92 行）。含仓务文件（`.gitattributes`、`.gitignore`、`README.md`、`README.upstream.md`、`package.json`、`package-lock.json`）时为 **19 文件 / +6458 −110**，其中 `package-lock.json` 占 5641 行工具链噪声。**`background.js` 一个字节都没改**（上游最大的文件，1706 行）——Firefox 侧的兼容靠垫片在运行前注入，而不是改业务代码。
 - 逐行差异可随时复查（`a1a5313` = 当前上游 HEAD，含 MIT 协议提交；`v1.66.1` 是移植前的基线 tag）：
 
   ```bash
@@ -55,6 +55,8 @@ LaterOn 是一个「项目型网页管理」扩展：把浏览到的网页按项
 | `settings.js` / `i18n.js` | 内置翻译（Chrome 的 `Translator` / `LanguageDetector`）在缺 API 时**降级隐藏**而不是报错；文案改为浏览器中立 | Firefox 没有 Chrome 内置翻译 API |
 | `scripts/build-release.py` | 加 `--target {chrome,firefox}` + `--amo`；Firefox 目标校验 Firefox 清单键；`RUNTIME_FILES` 首位加入 `"LICENSE"` | 一个脚本出两种包，且拒绝把 Chrome 键打进 Firefox 包；MIT 要求分发时携带协议全文 |
 | `LICENSE` | **来自上游**（`git merge a1a5313`，非本次移植所写）；构建时进包 | 上游 2026-10-12 采纳 MIT，分发衍生版必须保留版权声明与协议全文 |
+| `_locales/zh_CN/messages.json`、`_locales/en/messages.json` | 第八棒改名：`extensionName` 改为「LaterOn 社区移植版 · 项目型网页管理」/「LaterOn Community Port · Project Web Manager」，`actionTitle` 同步改名，`extensionDescription` 末尾追加「基于 gaoyiiiii/LaterOn 的非官方 Firefox 移植版（MIT 许可）。」 | 上游 README 的协议章节要求社区移植版**注明原项目与修改内容、区分社区版与官方版**；此前只有文档层面区分，装到浏览器里显示的仍是官方名 |
+| `tests/i18n-onboarding.test.js` | 断言里写死的旧显示名同步改成新名（**本移植版第一次修改上游测试文件**，只改期望字符串） | 不改则改名后该测试必然失败；改动最小化并已登记 |
 
 ### 清单（manifest）差异
 
@@ -105,7 +107,7 @@ LaterOn 是一个「项目型网页管理」扩展：把浏览到的网页按项
 
 ### 方式三：正式版永久安装（需要 AMO 签名）
 
-正式版只认 Mozilla 签名的包。**不需要手改清单** —— 本仓库的打包脚本已经能直接产出「签名专用包」`dist/LaterOn-1.66.1-firefox-amo.zip`（= Release 附件 `LaterOn-1.66.1-firefox-amo.xpi`，498812 字节，37 文件，含上游 `LICENSE`），它已声明 `"data_collection_permissions": {"required": ["none"]}` 并把 `strict_min_version` 设为 `140.0`：
+正式版只认 Mozilla 签名的包。**不需要手改清单** —— 本仓库的打包脚本已经能直接产出「签名专用包」`dist/LaterOn-1.66.1-firefox-amo.zip`（= Release 附件 `LaterOn-1.66.1-firefox-amo.xpi`，498924 字节，37 文件，含上游 `LICENSE`；四个包名/哈希口径见本节末），它已声明 `"data_collection_permissions": {"required": ["none"]}` 并把 `strict_min_version` 设为 `140.0`：
 
 ```bash
 python scripts/build-release.py --target firefox --amo   # → dist/LaterOn-1.66.1-firefox-amo.zip
@@ -128,7 +130,7 @@ python scripts/build-release.py --target firefox --amo   # → dist/LaterOn-1.66
 
 签名前建议先自查：`npx addons-linter dist/LaterOn-1.66.1-firefox-amo.zip` 应为 **0 error / 7 warning**（那 7 条见下「构建与测试」）。
 
-> **完整的、可逐步照做的签名指南见 [`port-docs/AMO签名操作指南.md`](port-docs/AMO签名操作指南.md)**：账号 2FA → API key → 准备 37 文件源目录 → 改名（**必须排在签名之前**）→ 两条签名路线 → 用 `META-INF/mozilla.rsa` 校验签名 → 替换 Release 附件 → 故障排查表。上面两条路线是它的摘要版。
+> **完整的、可逐步照做的签名指南见 [`port-docs/AMO签名操作指南.md`](port-docs/AMO签名操作指南.md)**：账号 2FA → API key → 准备 37 文件源目录 → 改名（**已于 2026-10-12 第八棒完成**）→ 两条签名路线 → 用 `META-INF/mozilla.rsa` 校验签名 → 替换 Release 附件 → 故障排查表。上面两条路线是它的摘要版。
 
 ---
 
@@ -157,7 +159,7 @@ npx web-ext run --source-dir <解包目录> --firefox <firefox 可执行文件> 
 **基线（上游 v1.66.1，未移植前）**：53 个测试 51 通过、2 个失败：
 `tests/background-modules.test.js`（上游自带的「`background.js` 体积 < 80000 字节」守卫，而它自己有 81138 字节）与 `tests/edit-item.test.js`（「编辑后立刻重画卡片」一项）。这两个失败**上游原本就有**，本版原样保留未修。
 
-**本版结果**：测试仍为 **51/53（与基线逐项一致，逐项结果见 `port-docs/baseline-amo.csv`）**；
+**本版结果**：测试仍为 **51/53（与基线逐项一致，逐项结果见 `port-docs/baseline-amo.csv`；改名后重跑见 `port-docs/baseline-rename.csv`）**；
 
 `addons-linter` 两个变体都是 **0 error / 7 warning**：
 
@@ -195,14 +197,14 @@ npx web-ext run --source-dir <解包目录> --firefox <firefox 可执行文件> 
 
 | 文件 | 内容 |
 |---|---|
-| `Firefox-适配技术方案.md` | **施工级技术方案**（3607 行）：可行性论证、逐文件改动设计、12 个清单变体的 addons-linter 实测矩阵、验收清单、附录 **F** 施工实测记录、附录 **G** AMO 签名版（dcp）实现与签名两条路线、附录 **H** 上游改用 MIT 后的合并/重打包/重新发布 |
-| `AMO签名操作指南.md` | **AMO 签名全流程（可执行版）**（306 行）：2FA / API key / 准备可签名源目录 / 改名（签名前）/ `web-ext sign` 与网页上传两条路线 / 校验 `META-INF/mozilla.rsa` / 替换 Release 附件 / 变更管理与故障排查表；头部声明哪些步骤已实测、哪些依据官方文档 |
+| `Firefox-适配技术方案.md` | **施工级技术方案**（3679 行）：可行性论证、逐文件改动设计、12 个清单变体的 addons-linter 实测矩阵、验收清单、附录 **F** 施工实测记录、附录 **G** AMO 签名版（dcp）实现与签名两条路线、附录 **H** 上游改用 MIT 后的合并/重打包/重新发布、附录 **I** 改名（社区版区隔）与重打包 |
+| `AMO签名操作指南.md` | **AMO 签名全流程（可执行版）**（308 行）：2FA / API key / 准备可签名源目录 / 改名（**已完成**，§4 保留操作过程与现行哈希）/ `web-ext sign` 与网页上传两条路线 / 校验 `META-INF/mozilla.rsa` / 替换 Release 附件 / 变更管理与故障排查表；头部声明哪些步骤已实测、哪些依据官方文档 |
 | `UI-人工点验清单.md` | **有头人工点验的操作脚本**：附录 F.6 那 7 项逐条给出「为什么无头测不了 / 代码位置 / 操作 / 通过判据 / 失败特征 / 记录字段」，含前置命令与记录模板 |
 | `Firefox-适配方案.md` | 早期可行性分析（工作量与风险清单） |
 | `LaterOn-项目分析.md` | 上游项目结构/架构分析 |
 | `notes-background.md`、`notes-content-scripts.md`、`notes-ui.md`、`notes-firefox-platform.md` | 上游源码阅读笔记 + Firefox 平台差异考证（逐条引用 MDN / BCD / Extension Workshop） |
-| `lint-firefox-final.json`、`lint-firefox-115.json`、`lint-firefox-amo.json` | addons-linter 原始输出（移植完成时 / 日常版 / AMO 签名版） |
-| `baseline-before.csv`、`baseline-after.csv`、`baseline-amo.csv`、`baseline-before-failures.txt` | 移植前 / 移植后 / 加 `--amo` 后的 53 项测试逐项结果对照 |
+| `lint-firefox-115.json`、`lint-firefox-amo.json` | addons-linter 原始输出（日常版 / AMO 签名版；两份都是**改名后重跑**的现行报告，0 error / 7 warning） |
+| `baseline-before.csv`、`baseline-after.csv`、`baseline-amo.csv`、`baseline-rename.csv`、`baseline-before-failures.txt` | 移植前 / 移植后 / 加 `--amo` 后 / **改名后** 的 53 项测试逐项结果对照（四份都是 51/53，失败恒为上游自带的那 2 个） |
 
 > 文档路径映射：方案与笔记里写的 `repo/` = 上游原版快照（本仓库不含，可用 `git checkout v1.66.1` 得到），`work/` = 本仓库根目录。
 

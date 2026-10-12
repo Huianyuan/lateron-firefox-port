@@ -15,7 +15,7 @@
 | 用哪个包去签名 | **必须是 AMO 变体**（`--target firefox --amo`） | 2025-11-03 起 AMO 拒绝缺 `data_collection_permissions` 的新扩展提交签名 |
 | 分发方式 | **unlisted（自行分发）** | 你的分发入口是 GitHub Release；listed 需要填一堆 AMO 元数据并过人工审核 |
 | 网页上传 vs 命令行 | **命令行 `web-ext sign`（推荐）** | 一条命令完成「建条目 → 上传 → 等签名 → 落盘」；网页路线作为备选 |
-| 要不要先改名 | **要，而且必须在签名前** | 签名后改一个字节签名即失效；改名后才能和上游官方版彻底区分 |
+| 要不要先改名 | **已经改完了**（2026-10-12 第八棒） | 扩展显示名现为「LaterOn 社区移植版 · 项目型网页管理」/「LaterOn Community Port · Project Web Manager」；改名必须早于签名，而 §3 解出来的包就是改名后的包 |
 | 预期耗时 | 账号+2FA 5–10 分钟，签名 1–3 分钟（被人工审核则最长 24h+），Release 替换 5 分钟 | AMO 官方说明：签名「up to 24 hours … or longer if selected for manual review」 |
 | 前置账号要求 | AMO 账号 + **强制 2FA** + API key（JWT issuer / JWT secret） | 2FA 是 2021-03-15 起的硬性要求，未开则拿不到 API key |
 
@@ -79,7 +79,7 @@ data_collection_permissions    : @{required=System.Object[]}
 > ```powershell
 > cd "$topic\work"
 > & "D:\ALL_Python\python312\python312.exe" "scripts\build-release.py" --target firefox --amo
-> # → dist/LaterOn-1.66.1-firefox-amo.zip（498812 字节，SHA256 6DCA6DEC…9C9E）
+> # → dist/LaterOn-1.66.1-firefox-amo.zip（498924 字节，SHA256 4B2674AA…F8B6）
 > ```
 > 注意：**`python` 裸命令在本机不可用**（PATH 里的 shim 会报 `Unable to create process`），必须用 `D:\ALL_Python\python312\python312.exe`。
 
@@ -87,16 +87,18 @@ data_collection_permissions    : @{required=System.Object[]}
 
 ---
 
-## 4. 可选但推荐：先改名（**必须在签名之前做**）
+## 4. 改名（**已于 2026-10-12 第八棒完成**）
 
-当前扩展显示名还是上游的 `LaterOn · 项目型网页管理`，与官方版无法区分。改名只需改两个 JSON 里的一行：
+**这一步已经做完了**，下面保留操作过程与结果，供你日后需要再次区分版本时参考。改名前扩展显示名是上游的 `LaterOn · 项目型网页管理`，与官方版无法区分，于是改了 `_locales` 两个 JSON 各三处：
 
-| 文件 | 键 | 现值 | 建议值（示例） |
+| 文件 | 键 | 改前 | 改后（现行） |
 |---|---|---|---|
-| `work\_locales\zh_CN\messages.json` | `extensionName.message` | `LaterOn · 项目型网页管理` | `LaterOn 社区移植版 · 项目型网页管理` |
-| `work\_locales\en\messages.json` | `extensionName.message` | `LaterOn · Project Web Manager` | `LaterOn Community Port · Project Web Manager` |
+| `work\_locales\zh_CN\messages.json` | `extensionName.message` | `LaterOn · 项目型网页管理` | **`LaterOn 社区移植版 · 项目型网页管理`** |
+| `work\_locales\en\messages.json` | `extensionName.message` | `LaterOn · Project Web Manager` | **`LaterOn Community Port · Project Web Manager`** |
+| 同上两份 | `actionTitle.message` | `打开 LaterOn 侧栏` / `Open the LaterOn side panel` | **`打开 LaterOn 社区移植版侧栏`** / **`Open the LaterOn Community Port side panel`** |
+| 同上两份 | `extensionDescription.message` | 上游原文 | 末尾追加「基于 gaoyiiiii/LaterOn 的非官方 Firefox 移植版（MIT 许可）。」/「 Unofficial Firefox port of gaoyiiiii/LaterOn (MIT).」 |
 
-（可选）`actionTitle.message`（`打开 LaterOn 侧栏` / `Open the LaterOn side panel`）也可同步加后缀。
+另外，上游测试 `work\tests\i18n-onboarding.test.js` 的断言里**写死了旧显示名**，改名后必须同步改（本移植版**第一次修改上游测试文件**）；改完 53 项测试仍是 **51/53**（2 个失败是上游 v1.66.1 自带的）。
 
 改完**必须**重新打包两个 Firefox 变体（同一份 manifest 派生）并重跑 linter：
 
@@ -109,7 +111,7 @@ cd "$topic\work"
 
 **注意**：
 - 只改文件**内容**，不新增文件；`scripts/build-release.py` 的 37 文件清单是白名单，多一个文件会被拒绝构建。
-- 改名后 **GitHub Release 里的旧包与新签名包会不一致**（名字不同），要把两个附件一起换掉。
+- 改名后 GitHub Release 里的两个附件**已一并换成改名后的包**（2026-10-12 第八棒）：`LaterOn-1.66.1-firefox.xpi` 498891 字节 / `CFE6333D…9F5F`、`LaterOn-1.66.1-firefox-amo.xpi` 498924 字节 / `4B2674AA…F8B6`（Chrome 对照包 498810 / `D2A10577…8C90`）。注意**旧包与新签名包仍然不一致**：签回来的包会再多一个 `META-INF/` 目录，字节数会增加。
 - **签名后改名字 = 签名失效**，所以这一步不能后置。
 
 **完成判据**：linter 仍是 `errors 0 / warnings 7`（`KEY_FIREFOX_ANDROID_UNSUPPORTED_BY_MIN_VERSION` + 4× `UNSAFE_VAR_ASSIGNMENT` + 2× `UNSUPPORTED_API sidePanel.setPanelBehavior`）。
@@ -205,8 +207,8 @@ Release：<https://github.com/Huianyuan/lateron-firefox-port/releases/tag/v1.66.
 
 | 附件 | 字节 | 说明 |
 |---|---|---|
-| `LaterOn-1.66.1-firefox.xpi` | 498779 | min 115 直装变体；**永远只能临时装载**（FF 115–139 用户用它） |
-| `LaterOn-1.66.1-firefox-amo.xpi` | 498812 | AMO 签名**输入**包（min 140 + dcp）；签名后建议替换 |
+| `LaterOn-1.66.1-firefox.xpi` | 498891 | min 115 直装变体；**永远只能临时装载**（FF 115–139 用户用它） |
+| `LaterOn-1.66.1-firefox-amo.xpi` | 498924 | AMO 签名**输入**包（min 140 + dcp）；签名后建议替换为 AMO 回传的签名包 |
 
 **网页操作（最简单）**：Release → `Edit` → 删除 `LaterOn-1.66.1-firefox-amo.xpi` → `Attach binaries` 上传签名包（建议重命名为 `LaterOn-1.66.1-firefox-signed.xpi`，**改文件名不影响签名**，改内容才失效）→ 正文里把该附件标成「Mozilla 已签名 · 下载即可永久安装」→ `Update release`。
 
@@ -264,7 +266,7 @@ Invoke-RestMethod -Method Post -Headers @{ Authorization = "token $tok" } `
 ## 11. 本指南未覆盖 / 未知项
 
 - 我**没有 AMO 账号**，第 2 步之后的真实页面文案、按钮位置可能随 AMO 改版变化；以实际页面为准，卡住把报错原文贴给我。
-- **改名决定未定**（第 4 节）——改名后要与上游官方版彻底区分，但会让 Release 附件与历史文档里的名字不一致；需要你拍板。
+- **改名已执行**（第 4 节，2026-10-12 第八棒）——显示名已与上游官方版区分；代价是三个构建产物的旧哈希全部作废，文档与 Release 附件已同步。
 - 签名需要 **min 140**，意味着 **FF 115–139 用户永远只能用临时装载的 115 包**；这是 dcp 政策的直接后果，无法绕过。
 - 7 项有头人工点验（见 `UI-人工点验清单.md`）与签名相互独立，签名不替代点验。
 
@@ -279,7 +281,7 @@ Invoke-RestMethod -Method Post -Headers @{ Authorization = "token $tok" } `
 | 签名 API 基址 | `https://addons.mozilla.org/api/v5/` |
 | 本扩展 ID 查询（实测 404 = 未注册） | `https://addons.mozilla.org/api/v5/addons/addon/lateron-ff-port-695d5826@lhy.local/` |
 | 源目录 | `C:\Users\lhy\AppData\Local\Temp\lateron-amo-src`（37 文件） |
-| 待签包 | `dist\LaterOn-1.66.1-firefox-amo.xpi`（498812 B / `6DCA6DEC48AB4FA3AFCE8DC316173DFA6069115D9E0D5FC82F455D79A6909C9E`） |
+| 待签包 | `dist\LaterOn-1.66.1-firefox-amo.xpi`（498924 B / `4B2674AAC5DB40225E7AEFCF3531CE18292BB82E11E0F5034793A509A3BDF8B6`；改名后的现行值，**签名输入就是它**） |
 | web-ext | `work\node_modules\.bin\web-ext.cmd`（8.10.0） |
 | 签名产物落盘 | `work\web-ext-artifacts\` |
 
@@ -303,4 +305,4 @@ Invoke-RestMethod -Method Post -Headers @{ Authorization = "token $tok" } `
 | 经代理 `127.0.0.1:7897` | 同样 404 ⇒ AMO 通道**不需要代理** |
 | web-ext 提交逻辑 | `work\node_modules\web-ext\lib\util\submit-addon.js`：`:169 POST addon/`（新建条目）、`:180 PUT addon/{id}/`、`:191 PATCH addon/{id}/versions/{versionId}/`；`:428` 注释确认「新扩展走创建分支」 |
 | web-ext 包结构 | 只有 `bin/` + `lib/`，**没有 `dist/`**（查源码别去 `dist\web-ext.js`） |
-| 现有两个 Release 附件 | 498779 / 498812 字节，**均无 `META-INF/`，都是未签名包** |
+| 现有两个 Release 附件 | 498891 / 498924 字节（改名后），**均无 `META-INF/`，都是未签名包** |
