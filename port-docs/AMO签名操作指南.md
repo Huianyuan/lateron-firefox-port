@@ -1,10 +1,11 @@
 # LaterOn Firefox 移植版 · AMO 签名操作指南（可执行版）
 
-> **文档版本**：v1.0（2026-10-12）
-> **适用产物**：`dist/LaterOn-1.66.1-firefox-amo.xpi`（= AMO 目标变体：`strict_min_version 140.0` + `data_collection_permissions`）
+> **文档版本**：v1.1（2026-10-13）
+> **适用产物**：`dist/LaterOn-1.66.1-firefox-amo-unsigned.xpi`（= AMO 目标变体：`strict_min_version 140.0` + `data_collection_permissions`）
 > **目标**：拿到 Mozilla 已签名的 `.xpi`，放进 GitHub Release，让用户「下载 → 双击 → 正式版 Firefox 直接装上」。
 > **本机实测依据**：web-ext 8.10.0 的参数表、`addons.mozilla.org` 网络可达性、web-ext 内部提交逻辑（详见附录 C）。
-> **诚实声明**：**我没有 AMO 账号，第 3 步之后（真正提交、拿回签名包）本机未实测**；所有账号侧动作来自 Mozilla 官方文档与 web-ext 源码。第 1、2 步（准备包、命令行参数）已在本机验证。
+> **✅ 已完成一次全流程（2026-10-13）**：本仓库已用本指南的路线 B 把 `dist/LaterOn-1.66.1-firefox-amo-unsigned.xpi` 提交 AMO 签名为 **unlisted**，约 6.5 分钟后取回签名包（518829 字节 / SHA-256 `E154AC5A67B6F1123BB2473387C5CACC1C2115CE4539B2C0B05A81CAE8277524` / 42 文件 / 含 `META-INF/mozilla.rsa`），并已替换 Release 附件 —— 详见本文 **§7.1 实测记录**。当初 v1.0 里「账号侧未实测」的声明至此解除。
+> **凭据纪律**：API key（JWT issuer / secret）等同账号凭据，**不要贴进聊天、工单或提交历史**；一旦外泄，立刻到 <https://addons.mozilla.org/developers/addon/api/key/> Revoke 后重新生成。
 
 ---
 
@@ -16,6 +17,7 @@
 | 分发方式 | **unlisted（自行分发）** | 你的分发入口是 GitHub Release；listed 需要填一堆 AMO 元数据并过人工审核 |
 | 网页上传 vs 命令行 | **命令行 `web-ext sign`（推荐）** | 一条命令完成「建条目 → 上传 → 等签名 → 落盘」；网页路线作为备选 |
 | 要不要先改名 | **已经改完了**（2026-10-12 第八棒） | 扩展显示名现为「LaterOn 社区移植版 · 项目型网页管理」/「LaterOn Community Port · Project Web Manager」；改名必须早于签名，而 §3 解出来的包就是改名后的包 |
+| 执行状态 | **2026-10-13 已全流程跑通一次**（unlisted，约 6.5 分钟） | 签名包 518829 字节 / `E154AC5A…7524`，已替换 Release 附件；下次改版本时照本文重跑 |
 | 预期耗时 | 账号+2FA 5–10 分钟，签名 1–3 分钟（被人工审核则最长 24h+），Release 替换 5 分钟 | AMO 官方说明：签名「up to 24 hours … or longer if selected for manual review」 |
 | 前置账号要求 | AMO 账号 + **强制 2FA** + API key（JWT issuer / JWT secret） | 2FA 是 2021-03-15 起的硬性要求，未开则拿不到 API key |
 
@@ -57,7 +59,7 @@ Remove-Item -Recurse -Force $src -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $src | Out-Null
 
 # 用 python 解包（Expand-Archive 只认 .zip 后缀，对 .xpi 会报错）
-& "D:\ALL_Python\python312\python312.exe" -c "import zipfile,sys; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])" "$topic\dist\LaterOn-1.66.1-firefox-amo.xpi" $src
+& "D:\ALL_Python\python312\python312.exe" -c "import zipfile,sys; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])" "$topic\dist\LaterOn-1.66.1-firefox-amo-unsigned.xpi" $src
 
 # 期望：37 个文件
 & "D:\ALL_Python\python312\python312.exe" -c "import sys,os; print(sum(len(f) for _,_,f in os.walk(sys.argv[1])))" $src
@@ -75,11 +77,11 @@ strict_min_version             : 140.0
 data_collection_permissions    : @{required=System.Object[]}
 ```
 
-> 若 `dist/LaterOn-1.66.1-firefox-amo.xpi` 不存在或已过期，用下面命令重建（cwd 必须是 `work\`，python 用全路径）：
+> 若 `dist/LaterOn-1.66.1-firefox-amo-unsigned.xpi` 不存在或已过期，用下面命令重建（cwd 必须是 `work\`，python 用全路径）；重建后把 `work\dist\LaterOn-1.66.1-firefox-amo.zip` 复制为 `dist\LaterOn-1.66.1-firefox-amo-unsigned.xpi`：
 > ```powershell
 > cd "$topic\work"
 > & "D:\ALL_Python\python312\python312.exe" "scripts\build-release.py" --target firefox --amo
-> # → dist/LaterOn-1.66.1-firefox-amo.zip（498924 字节，SHA256 4B2674AA…F8B6）
+> # → dist/LaterOn-1.66.1-firefox-amo.zip（498924 字节，SHA256 4B2674AA…F8B6；这是加 LICENSE + 改名后的当前值，构建确定性，同源同哈希）
 > ```
 > 注意：**`python` 裸命令在本机不可用**（PATH 里的 shim 会报 `Unable to create process`），必须用 `D:\ALL_Python\python312\python312.exe`。
 
@@ -111,7 +113,7 @@ cd "$topic\work"
 
 **注意**：
 - 只改文件**内容**，不新增文件；`scripts/build-release.py` 的 37 文件清单是白名单，多一个文件会被拒绝构建。
-- 改名后 GitHub Release 里的两个附件**已一并换成改名后的包**（2026-10-12 第八棒）：`LaterOn-1.66.1-firefox.xpi` 498891 字节 / `CFE6333D…9F5F`、`LaterOn-1.66.1-firefox-amo.xpi` 498924 字节 / `4B2674AA…F8B6`（Chrome 对照包 498810 / `D2A10577…8C90`）。注意**旧包与新签名包仍然不一致**：签回来的包会再多一个 `META-INF/` 目录，字节数会增加。
+- 改名后 GitHub Release 里的附件已在 2026-10-12 第八棒换成改名后的包，又在 **2026-10-13 把 amo 附件换成了 AMO 回签包**（518829 字节 / `E154AC5A…7524`，42 文件）；`LaterOn-1.66.1-firefox.xpi` 保持未签名 498891 字节 / `CFE6333D…9F5F`（Chrome 对照包 498810 / `D2A10577…8C90`）；未签名输入件另存 `dist/LaterOn-1.66.1-firefox-amo-unsigned.xpi`（498924 / `4B2674AA…F8B6`）。
 - **签名后改名字 = 签名失效**，所以这一步不能后置。
 
 **完成判据**：linter 仍是 `errors 0 / warnings 7`（`KEY_FIREFOX_ANDROID_UNSUPPORTED_BY_MIN_VERSION` + 4× `UNSAFE_VAR_ASSIGNMENT` + 2× `UNSUPPORTED_API sidePanel.setPanelBehavior`）。
@@ -132,10 +134,10 @@ $src   = "C:\Users\lhy\AppData\Local\Temp\lateron-amo-src"
     --channel         unlisted `
     --api-key         "<JWT issuer>" `
     --api-secret      "<JWT secret>" `
-    --approval-timeout 300000 `
-    --no-input `
-    --verbose
+    --no-input
 ```
+
+**不要随手加 `--approval-timeout`**：本仓库实测从提交到取回签名包用了 **6.5 分钟**（`--approval-timeout 300000` 这类 5 分钟值会中途放弃等待）。要么不写（用默认更长的超时），要么给到 `900000` 以上；真不想等就设 `--approval-timeout 0`（只提交，之后从 AMO 侧取回签名包）。
 
 ### 5.2 参数表（web-ext 8.10.0 实测）
 
@@ -159,10 +161,10 @@ $src   = "C:\Users\lhy\AppData\Local\Temp\lateron-amo-src"
 
 1. 本地校验 manifest 并打成临时 zip；
 2. `POST https://addons.mozilla.org/api/v5/addon/` —— **新扩展会被自动创建条目**（源码注释：`it's the indication that a new add-on should be created, rather than a new version`）；
-   - 本机实测该 ID `lateron-ff-port-695d5826@lhy.local` 目前 **404 Not found**，即**尚未注册**，正是「新扩展」路径。
-3. 带 `channel=unlisted` 上传 XPI → 等待 AMO 签名；
-4. 签名完成后把签名包写进 `--artifacts-dir`，文件名由 AMO 决定（形如 `<id>-1.66.1-an+fx.xpi`）；
-5. 终端出现 `Your add-on has been submitted for signing.` / `Signed XPI downloaded to: …` 之类的成功行。
+   - 本机实测：该 ID `lateron-ff-port-695d5826@lhy.local` 在**签名前**是 `404 Not found`（尚未注册），2026-10-13 的签名动作已按「新扩展」路径**自动建好条目**，之后同一 ID 再提交就是发新版。
+3. 带 `channel=unlisted` 上传 XPI → 等待 AMO 签名（实测日志依次打印 `Waiting for validation...` → `Waiting for approval...`）；
+4. 签名完成后把签名包写进 `--artifacts-dir`，文件名由 AMO 决定（实测为 `d64cd310169e472eab7c-1.66.1.xpi`，前缀是 AMO 内部标识，**可随意改名**）；
+5. 终端出现 `Signed xpi downloaded: <路径>`，进程退出码 0。
 
 ### 5.4 完成判据
 
@@ -192,41 +194,54 @@ $signed = "<web-ext-artifacts 或浏览器下载目录里的签名 xpi>"
 & "D:\ALL_Python\python312\python312.exe" -c "import zipfile,sys; z=zipfile.ZipFile(sys.argv[1]); print([n for n in z.namelist() if n.startswith('META-INF')])" $signed
 ```
 
-**期望**：出现 `META-INF/manifest.mf`、`META-INF/mozilla.sf`、`META-INF/mozilla.rsa`（Mozilla 的 JAR 签名块）。未签名的包**没有 `META-INF/`**（当前 `dist/` 里两个 `.xpi` 都是未签名的）。
+**期望**：出现 `META-INF/manifest.mf`、`META-INF/mozilla.sf`、`META-INF/mozilla.rsa`（Mozilla 的 JAR 签名块）。未签名的包**没有 `META-INF/`**（`dist/` 里 `LaterOn-1.66.1-firefox.xpi` 与 `...-amo-unsigned.xpi` 就是未签名的）。
 
 终局验证（唯一权威）：在**正式版 Firefox**（本机 `D:\Firefox\firefox.exe`）里 `about:addons` → 齿轮 → **从文件安装附加组件** → 选该 xpi：
 - 签名有效：**不出现**「无法安装未签名附加组件」提示，直接装上，且不需要改任何 `about:config`；
 - 未签名：正式版会拒绝安装（此前只能靠 `about:debugging` 临时装载或 `xpinstall.signatures.required=false` 绕过）。
+
+### 7.1 本仓库实测记录（2026-10-13，unlisted）
+
+| 项 | 值 |
+|---|---|
+| 命令 | `web-ext sign --source-dir <解包目录> --artifacts-dir work\web-ext-artifacts --channel unlisted --api-key <JWT issuer> --api-secret <JWT secret> --no-input` |
+| 日志时序 | `Building web extension from …` → `Waiting for validation...` → `Waiting for approval...` → `Signed xpi downloaded: …\web-ext-artifacts/d64cd310169e472eab7c-1.66.1.xpi`，`exit code 0` |
+| 耗时 | 23:55:19 启动 → 00:01:52 完成，**约 6.5 分钟**（自动校验通过，未进人工队列） |
+| 落盘文件名 | `d64cd310169e472eab7c-1.66.1.xpi`（前缀是 AMO 内部的扩展标识，不是扩展 ID；可随意改名，不影响签名） |
+| 产物 | 518829 字节 / **42 文件**（原 37 + 5 个 `META-INF/`）/ SHA-256 `E154AC5A67B6F1123BB2473387C5CACC1C2115CE4539B2C0B05A81CAE8277524` |
+| 签名块 | `META-INF/mozilla.rsa` 4379 字节；同时有 `cose.sig` + `cose.manifest`（Firefox 140+ 的 COSE 签名） |
+| 键值复核 | 显示名（zh/en）、`gecko.id`、`strict_min_version 140.0`、`data_collection_permissions {"required":["none"]}` 与签名前逐字段一致 |
+| 首次提交副作用 | AMO **自动建立了该扩展的条目**（无需先去网页手建）：`GET https://addons.mozilla.org/api/v5/addons/addon/lateron-ff-port-695d5826@lhy.local/` 此前返回 404，签名动作用了源码里的 `POST addon/` 分支 |
 
 ---
 
 ## 8. 签名之后：更新 GitHub Release
 
 Release：<https://github.com/Huianyuan/lateron-firefox-port/releases/tag/v1.66.1-ff-port>（release id `409797272`）
-当前两个附件（**都是未签名包**）：
+当前两个附件中的 **amo 附件已在 2026-10-13 换成 AMO 回签包**：
 
 | 附件 | 字节 | 说明 |
 |---|---|---|
 | `LaterOn-1.66.1-firefox.xpi` | 498891 | min 115 直装变体；**永远只能临时装载**（FF 115–139 用户用它） |
-| `LaterOn-1.66.1-firefox-amo.xpi` | 498924 | AMO 签名**输入**包（min 140 + dcp）；签名后建议替换为 AMO 回传的签名包 |
+| `LaterOn-1.66.1-firefox-amo.xpi` | 518829 | **AMO 已签名**（unlisted）；正式版「从文件安装」即可永久安装。未签名输入件另存为 `dist/LaterOn-1.66.1-firefox-amo-unsigned.xpi`，只用于下次重新签名 |
 
-**网页操作（最简单）**：Release → `Edit` → 删除 `LaterOn-1.66.1-firefox-amo.xpi` → `Attach binaries` 上传签名包（建议重命名为 `LaterOn-1.66.1-firefox-signed.xpi`，**改文件名不影响签名**，改内容才失效）→ 正文里把该附件标成「Mozilla 已签名 · 下载即可永久安装」→ `Update release`。
+**网页操作（最简单）**：Release → `Edit` → 删除旧的 amo 附件 → `Attach binaries` 上传签名包（改文件名**不影响**签名，只有改内容才失效）→ 正文里把该附件标成「Mozilla 已签名 · 下载即可永久安装」→ `Update release`。
 
-**命令行/API 操作**（本仓库此前用过这条路，本机**没有 `gh` CLI**）：token 从 Windows 凭据管理器现取现用（只留在进程内，不打印、不落盘）：
+**命令行/API 操作**（本仓库走的就是这条路，本机**没有 `gh` CLI**）：token 从 Windows 凭据管理器现取现用（只留在进程内，不打印、不落盘）：
 
 ```powershell
 $env:GIT_TERMINAL_PROMPT = "0"
 $cred = ("protocol=https`nhost=github.com`n`n" | git credential fill) | Out-String
 $tok  = ($cred -split "`r?`n" | Where-Object { $_ -like "password=*" }) -replace "^password=", ""
 
-# 1) 删掉旧的未签名 amo 附件（id 634104772）
+# 1) 删掉旧的 amo 附件（先 GET releases/409797272 看 assets[].id，2026-10-13 换掉的是 id 634183779）
 Invoke-RestMethod -Method Delete -Headers @{ Authorization = "token $tok" } `
-  -Uri "https://api.github.com/repos/Huianyuan/lateron-firefox-port/releases/assets/634104772"
+  -Uri "https://api.github.com/repos/Huianyuan/lateron-firefox-port/releases/assets/<asset id>"
 
-# 2) 上传签名包
+# 2) 上传签名包（保持同名 → 下载链不变）
 Invoke-RestMethod -Method Post -Headers @{ Authorization = "token $tok" } `
   -ContentType "application/xpi" -InFile "<签名包路径>" `
-  -Uri "https://uploads.github.com/repos/Huianyuan/lateron-firefox-port/releases/409797272/assets?name=LaterOn-1.66.1-firefox-signed.xpi"
+  -Uri "https://uploads.github.com/repos/Huianyuan/lateron-firefox-port/releases/409797272/assets?name=LaterOn-1.66.1-firefox-amo.xpi"
 ```
 
 （`api.github.com` 与 `uploads.github.com` 本机直连可用；若某步报连接重置，加 `-Proxy http://127.0.0.1:7897`。）
@@ -245,6 +260,7 @@ Invoke-RestMethod -Method Post -Headers @{ Authorization = "token $tok" } `
 | 想让 unlisted 包自动更新 | AMO 不推送更新；需要额外在 `gecko` 里加 `update_url` 指向自建 update.json |
 | 想上架 AMO（listed） | 需补名称/简介/分类/协议等元数据并过人工审核；签名效力与 unlisted **完全相同** |
 | ID | `lateron-ff-port-695d5826@lhy.local` 签名后**不可更改**；若要换 ID，必须在**这次签名之前**决定 |
+| API key 外泄 | 立即到 <https://addons.mozilla.org/developers/addon/api/key/> **Revoke** 该对凭据并 Generate new credentials；已签名/已发布的扩展**不受影响**，只是旧凭据失效 |
 
 ---
 
@@ -265,9 +281,11 @@ Invoke-RestMethod -Method Post -Headers @{ Authorization = "token $tok" } `
 
 ## 11. 本指南未覆盖 / 未知项
 
-- 我**没有 AMO 账号**，第 2 步之后的真实页面文案、按钮位置可能随 AMO 改版变化；以实际页面为准，卡住把报错原文贴给我。
+> **2026-10-13 更新**：第 2 步之后的**真实提交已经跑过一遍**（unlisted，6.5 分钟拿到签名包），「账号侧未实测」的说法至此解除；仍未亲手在正式版里点过「从文件安装」（无头环境替代不了），这一步留给验收。
+- AMO 网页路线的真实页面文案、按钮位置可能随 AMO 改版变化；以实际页面为准，卡住把报错原文贴给我。
 - **改名已执行**（第 4 节，2026-10-12 第八棒）——显示名已与上游官方版区分；代价是三个构建产物的旧哈希全部作废，文档与 Release 附件已同步。
 - 签名需要 **min 140**，意味着 **FF 115–139 用户永远只能用临时装载的 115 包**；这是 dcp 政策的直接后果，无法绕过。
+- **unlisted 不自动更新**：用户装了签名包后不会收到新版本，需要自建 `update_url`（见 §9）或让用户手动换包。
 - 7 项有头人工点验（见 `UI-人工点验清单.md`）与签名相互独立，签名不替代点验。
 
 ---
@@ -281,7 +299,8 @@ Invoke-RestMethod -Method Post -Headers @{ Authorization = "token $tok" } `
 | 签名 API 基址 | `https://addons.mozilla.org/api/v5/` |
 | 本扩展 ID 查询（实测 404 = 未注册） | `https://addons.mozilla.org/api/v5/addons/addon/lateron-ff-port-695d5826@lhy.local/` |
 | 源目录 | `C:\Users\lhy\AppData\Local\Temp\lateron-amo-src`（37 文件） |
-| 待签包 | `dist\LaterOn-1.66.1-firefox-amo.xpi`（498924 B / `4B2674AAC5DB40225E7AEFCF3531CE18292BB82E11E0F5034793A509A3BDF8B6`；改名后的现行值，**签名输入就是它**） |
+| 待签包（输入） | `dist\LaterOn-1.66.1-firefox-amo-unsigned.xpi`（498924 B / `4B2674AAC5DB40225E7AEFCF3531CE18292BB82E11E0F5034793A509A3BDF8B6`；改名后的现行值） |
+| 已签包（输出） | `dist\LaterOn-1.66.1-firefox-amo.xpi`（518829 B / `E154AC5A67B6F1123BB2473387C5CACC1C2115CE4539B2C0B05A81CAE8277524`；42 文件，含 `META-INF/`） |
 | web-ext | `work\node_modules\.bin\web-ext.cmd`（8.10.0） |
 | 签名产物落盘 | `work\web-ext-artifacts\` |
 
@@ -296,7 +315,9 @@ Invoke-RestMethod -Method Post -Headers @{ Authorization = "token $tok" } `
 - 2FA 强制：<https://blog.mozilla.org/addons/2021/03/11/two-factor-authentication-required-for-extension-developers/>
 - 未签名扩展在正式版被拒：<https://support.mozilla.org/en-US/kb/add-on-signing-in-firefox>
 
-## 附录 C · 本机实测证据（本轮）
+## 附录 C · 本机实测证据
+
+### C.1 2026-10-12 调研证据
 
 | 项 | 结果 |
 |---|---|
@@ -305,4 +326,16 @@ Invoke-RestMethod -Method Post -Headers @{ Authorization = "token $tok" } `
 | 经代理 `127.0.0.1:7897` | 同样 404 ⇒ AMO 通道**不需要代理** |
 | web-ext 提交逻辑 | `work\node_modules\web-ext\lib\util\submit-addon.js`：`:169 POST addon/`（新建条目）、`:180 PUT addon/{id}/`、`:191 PATCH addon/{id}/versions/{versionId}/`；`:428` 注释确认「新扩展走创建分支」 |
 | web-ext 包结构 | 只有 `bin/` + `lib/`，**没有 `dist/`**（查源码别去 `dist\web-ext.js`） |
-| 现有两个 Release 附件 | 498891 / 498924 字节（改名后），**均无 `META-INF/`，都是未签名包** |
+| 现有两个 Release 附件 | `LaterOn-1.66.1-firefox.xpi` 498891（未签名）/ `LaterOn-1.66.1-firefox-amo.xpi` **518829（2026-10-13 已换成 AMO 签名包）** |
+
+### C.2 2026-10-13 签名实跑新增证据
+
+| 项 | 结果 |
+|---|---|
+| 命令与退出码 | `web-ext sign … --channel unlisted --no-input` → `exit code 0` |
+| 日志时序 | `Building web extension from <src>` → `Waiting for validation...` → `Waiting for approval...` → `Signed xpi downloaded: …\d64cd310169e472eab7c-1.66.1.xpi` |
+| 实际耗时 | 23:55:19 → 00:01:52（**6 分 33 秒**）；**未进人工审核队列** |
+| 产物指纹 | 518829 字节 / 42 文件 / `E154AC5A67B6F1123BB2473387C5CACC1C2115CE4539B2C0B05A81CAE8277524` |
+| `META-INF/` 内容 | `manifest.mf`、`mozilla.sf`、`mozilla.rsa`(4379 B)、`cose.manifest`、`cose.sig` |
+| AMO 是否新建条目 | 是（此前该 ID 查询 404；签名动作走 `POST addon/` 分支自动建条目） |
+| 键值是否被改动 | 否——显示名、`gecko.id`、`strict_min_version`、`data_collection_permissions` 与签名前逐字段一致 |

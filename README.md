@@ -6,7 +6,7 @@ LaterOn 是一个「项目型网页管理」扩展：把浏览到的网页按项
 | | |
 |---|---|
 | 本版基线 | LaterOn **v1.66.1**（上游 commit `00fde27be93656d650ac5c52adc2684d511adb53`）+ 上游 **`a1a5313`**（2026-10-12 采纳 MIT、打包含 LICENSE，已 merge 进本仓库） |
-| 本版形态 | 未签名 XPI（WebExtension，Manifest V3），两个变体：**日常版** `strict_min_version: 115.0`；**AMO 签名版** `strict_min_version: 140.0` + `data_collection_permissions: {"required": ["none"]}`。两个变体的扩展显示名都是 **`LaterOn 社区移植版 · 项目型网页管理`**（zh_CN）/ **`LaterOn Community Port · Project Web Manager`**（en），与上游官方版在用户可见层面区分开 |
+| 本版形态 | WebExtension（Manifest V3），两个变体：**日常版** `strict_min_version: 115.0`（**未签名**，只能临时载入）；**AMO 签名版** `strict_min_version: 140.0` + `data_collection_permissions: {"required": ["none"]}`（**已由 AMO 签名（unlisted），正式版可用「从文件安装」永久安装**，见「安装 · 方式三」）。两个变体的扩展显示名都是 **`LaterOn 社区移植版 · 项目型网页管理`**（zh_CN）/ **`LaterOn Community Port · Project Web Manager`**（en），与上游官方版在用户可见层面区分开 |
 | 适配方式 | 用独立清单 `manifest.firefox.json` + 一个转接垫片 `ff-sidebar.js`，**不改 `background.js` 业务逻辑** |
 | 移植前基线 | 原版测试 51/53 通过（2 个上游既有失败，见下）；addons-linter **0 error / 7 warning** |
 | 已实测 | Firefox 157.0.1 真实装载（无头 `web-ext run`）：后台页与 3 个扩展页全部无 JS 报错；两个变体都过 addons-linter **0 error / 7 warning** |
@@ -79,7 +79,7 @@ LaterOn 是一个「项目型网页管理」扩展：把浏览到的网页按项
 4. `contextMenus` 的 `"action"` 上下文在 Firefox 中的呈现（Firefox 上可能表现为工具栏按钮菜单）。
 5. Trusted Types 站点上 `innerHTML` 的 4 处告警（上游既有代码，非本次引入）。
 6. Firefox MV3 后台是**会被唤醒、回收的事件页**：上游 `background.js` 有若干纯内存集合（如已注入 CSS 的标签页集合），事件页被回收后可能重复注入。本版未改业务逻辑，建议后续单独改成 `storage.session`。
-7. 正式版 Firefox 永久安装需要 AMO 签名（见「安装 · 方式三」，签名专用包已内置可一键产出）。
+7. 正式版 Firefox 永久安装：**已签名的 `LaterOn-1.66.1-firefox-amo.xpi` 直接可用**（见「安装 · 方式三」）；日后为新版本重新签名时，签名专用包可由构建脚本一键产出。
 
 > 上面 1–7 项**不是"还没查"，而是"无头环境查不了"**：它们要么取决于真实的侧栏宽度与渲染，要么取决于真人点击产生的手势与系统级上下文。逐条操作步骤、代码行号、通过判据与记录模板见 [`port-docs/UI-人工点验清单.md`](port-docs/UI-人工点验清单.md)。
 
@@ -105,9 +105,27 @@ LaterOn 是一个「项目型网页管理」扩展：把浏览到的网页按项
 
 > ⚠️ 仅 **Developer Edition / ESR / Nightly** 允许关闭签名校验。**Firefox 正式版（Release/Beta）即使改了 `xpinstall.signatures.required` 也会拒绝安装未签名 XPI**。
 
-### 方式三：正式版永久安装（需要 AMO 签名）
+### 方式三：正式版永久安装（**已完成签名，直接可用**）
 
-正式版只认 Mozilla 签名的包。**不需要手改清单** —— 本仓库的打包脚本已经能直接产出「签名专用包」`dist/LaterOn-1.66.1-firefox-amo.zip`（= Release 附件 `LaterOn-1.66.1-firefox-amo.xpi`，498924 字节，37 文件，含上游 `LICENSE`；四个包名/哈希口径见本节末），它已声明 `"data_collection_permissions": {"required": ["none"]}` 并把 `strict_min_version` 设为 `140.0`：
+Release 附件 **`LaterOn-1.66.1-firefox-amo.xpi`（518829 字节，42 文件，含 `META-INF/mozilla.rsa`）已经是 AMO 回签的包**，在正式版 Firefox 上：
+
+1. 下载该 `.xpi`（**不要解压**，签名与文件内容绑定，改一个字节即失效）；
+2. `about:addons` → 右上齿轮 ⚙ → **「从文件安装附加组件…」** → 选中它；
+3. 确认权限与「不收集数据」提示 → 完成，**重启浏览器不失效**。
+
+> 要求 **Firefox 140 及以上**（该包声明了 `data_collection_permissions`，AMO 自 2025-11-03 起对新扩展强制要求，而该键只有 Firefox 140+ 认）。**115–139 的用户请用方式一临时载入**日常版包。
+
+签名记录（2026-10-13，unlisted 渠道，`web-ext` 8.10.0）：
+
+| 项 | 值 |
+|---|---|
+| 输入 | `dist/LaterOn-1.66.1-firefox-amo-unsigned.xpi`（498924 字节 / 37 文件 / SHA-256 `4B2674AA…F8B6`） |
+| 输出 | `dist/LaterOn-1.66.1-firefox-amo.xpi`（**518829 字节 / 42 文件 / SHA-256 `E154AC5A67B6F1123BB2473387C5CACC1C2115CE4539B2C0B05A81CAE8277524`**） |
+| 耗时 | 提交 2026-10-12 23:55 → 回签包落盘 2026-10-13 00:01（约 6 分 33 秒，自动校验通过） |
+| 签名块 | `META-INF/`：`manifest.mf`、`mozilla.sf`、`mozilla.rsa`(4379 B)、`cose.manifest`、`cose.sig` |
+| 未变项 | 显示名、`gecko.id`（`lateron-ff-port-695d5826@lhy.local`）、`strict_min_version`、`data_collection_permissions` 与签名前逐字段一致 |
+
+**重新签名（发布新版本时）**：打包脚本可一键产出「签名专用包」`dist/LaterOn-1.66.1-firefox-amo.zip`（37 文件，声明 `"data_collection_permissions": {"required": ["none"]}` 且 `strict_min_version` 为 `140.0`）：
 
 ```bash
 python scripts/build-release.py --target firefox --amo   # → dist/LaterOn-1.66.1-firefox-amo.zip
@@ -121,7 +139,7 @@ python scripts/build-release.py --target firefox --amo   # → dist/LaterOn-1.66
 - **命令行**（把 `-s` 指向**解包后的 37 文件干净目录**，不要指向仓库根目录，否则 `node_modules` 会被一起打包）：
 
   ```bash
-  unzip -o dist/LaterOn-1.66.1-firefox-amo.zip -d /tmp/lateron-amo
+  unzip -o dist/LaterOn-1.66.1-firefox-amo-unsigned.xpi -d /tmp/lateron-amo   # 未签名输入件（下次签名时的输入）
   npx web-ext sign -s /tmp/lateron-amo -a dist/signed \
       --channel unlisted --api-key <KEY> --api-secret <SECRET>
   ```
@@ -130,7 +148,7 @@ python scripts/build-release.py --target firefox --amo   # → dist/LaterOn-1.66
 
 签名前建议先自查：`npx addons-linter dist/LaterOn-1.66.1-firefox-amo.zip` 应为 **0 error / 7 warning**（那 7 条见下「构建与测试」）。
 
-> **完整的、可逐步照做的签名指南见 [`port-docs/AMO签名操作指南.md`](port-docs/AMO签名操作指南.md)**：账号 2FA → API key → 准备 37 文件源目录 → 改名（**已于 2026-10-12 第八棒完成**）→ 两条签名路线 → 用 `META-INF/mozilla.rsa` 校验签名 → 替换 Release 附件 → 故障排查表。上面两条路线是它的摘要版。
+> **完整的、可逐步照做的签名指南见 [`port-docs/AMO签名操作指南.md`](port-docs/AMO签名操作指南.md)**：账号 2FA → API key → 准备 37 文件源目录 → 改名（**已于 2026-10-12 第八棒完成**）→ 两条签名路线 → 用 `META-INF/mozilla.rsa` 校验签名 → 替换 Release 附件 → 故障排查表；**§7.1 是上面那次签名的实测记录**。上面两条路线是它的摘要版。
 
 ---
 
@@ -197,8 +215,8 @@ npx web-ext run --source-dir <解包目录> --firefox <firefox 可执行文件> 
 
 | 文件 | 内容 |
 |---|---|
-| `Firefox-适配技术方案.md` | **施工级技术方案**（3679 行）：可行性论证、逐文件改动设计、12 个清单变体的 addons-linter 实测矩阵、验收清单、附录 **F** 施工实测记录、附录 **G** AMO 签名版（dcp）实现与签名两条路线、附录 **H** 上游改用 MIT 后的合并/重打包/重新发布、附录 **I** 改名（社区版区隔）与重打包 |
-| `AMO签名操作指南.md` | **AMO 签名全流程（可执行版）**（308 行）：2FA / API key / 准备可签名源目录 / 改名（**已完成**，§4 保留操作过程与现行哈希）/ `web-ext sign` 与网页上传两条路线 / 校验 `META-INF/mozilla.rsa` / 替换 Release 附件 / 变更管理与故障排查表；头部声明哪些步骤已实测、哪些依据官方文档 |
+| `Firefox-适配技术方案.md` | **施工级技术方案**（3748 行）：可行性论证、逐文件改动设计、12 个清单变体的 addons-linter 实测矩阵、验收清单、附录 **F** 施工实测记录、附录 **G** AMO 签名版（dcp）实现与签名两条路线、附录 **H** 上游改用 MIT 后的合并/重打包/重新发布、附录 **I** 改名（社区版区隔）与重打包、附录 **J** AMO 实测签名与「下载即装」 |
+| `AMO签名操作指南.md` | **AMO 签名全流程（可执行版）**（v1.1）：2FA / API key / 准备可签名源目录 / 改名（**已完成**，§4 保留操作过程与现行哈希）/ `web-ext sign` 与网页上传两条路线 / 校验 `META-INF/mozilla.rsa` / 替换 Release 附件 / 变更管理与故障排查表；**§7.1 = 2026-10-13 实签记录**（6 分 33 秒、518829 字节、`E154AC5A…7524`），附录 C 分调研证据与实跑证据 |
 | `UI-人工点验清单.md` | **有头人工点验的操作脚本**：附录 F.6 那 7 项逐条给出「为什么无头测不了 / 代码位置 / 操作 / 通过判据 / 失败特征 / 记录字段」，含前置命令与记录模板 |
 | `Firefox-适配方案.md` | 早期可行性分析（工作量与风险清单） |
 | `LaterOn-项目分析.md` | 上游项目结构/架构分析 |

@@ -3674,6 +3674,75 @@ cd "$topic\work"
 
 ### I.7 本轮仍未做
 
-- **AMO 上传签名仍未执行**（需账号 2FA + API key，是不可逆的对外动作，等用户执行/确认；步骤见 `AMO签名操作指南.md`）。
-- **A-01~A-07 有头人工点验仍未做**（`UI-人工点验清单.md`）。
+- **AMO 上传签名已在第九棒执行完毕**（2026-10-13，unlisted，见本附录 J），这一条不再是未做项。
+- **A-01~A-07 有头人工点验仍未做**（`UI-人工点验清单.md`）；正式版里「从文件安装」签名包这一步也需要人工点一次。
 - 改名后仍存在的能力取舍：**FF 115–139 用户无法使用永久安装**（AMO 签名版必须 min 140 + dcp），直装版永远只能临时装载 —— 这是 dcp 政策带来的，不是本次改名引入的。
+
+---
+
+## 附录 J · AMO 实测签名与「下载即装」（2026-10-13 第九棒）
+
+### J.1 背景与目标
+
+第八棒把显示名改成社区移植版后，剩最后一步：**把包真正送去 AMO 签名**，让正式版 Firefox 能「下载 → 从文件安装 → 永久生效」。附录 G 与 `AMO签名操作指南.md` 已经把步骤写全，但此前**从未真正执行**（没有 AMO 账号/凭据）。本轮用户把 AMO 的 **JWT issuer / JWT secret** 交给本会话并要求「完全来做」，于是按指南路线 B 实跑一次 **unlisted** 签名。
+
+目标产物：一个包内有 Mozilla 签名块、可直接被正式版接受的 `.xpi`。
+
+### J.2 执行步骤（照 `AMO签名操作指南.md` §3 + §5）
+
+```powershell
+# 1) 解包待签包到干净源目录（Expand-Archive 只认 .zip，用 python）
+$src = "$env:TEMP\lateron-amo-src"
+& "D:\ALL_Python\python312\python312.exe" -c "import zipfile,sys; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])" "$topic\dist\LaterOn-1.66.1-firefox-amo-unsigned.xpi" $src
+# → 37 个文件；manifest: id lateron-ff-port-695d5826@lhy.local / strict_min_version 140.0 / dcp required none
+
+# 2) 提交签名（unlisted = 只签名不上架；不要在命令行回显凭据）
+& "$topic\work\node_modules\.bin\web-ext.cmd" sign `
+    --source-dir $src --artifacts-dir "$topic\work\web-ext-artifacts" `
+    --channel unlisted --api-key <JWT issuer> --api-secret <JWT secret> --no-input
+```
+
+- **不要加 `--approval-timeout 300000` 这类 5 分钟值**：本轮实测从提交到取回签名包用了 **6 分 33 秒**，5 分钟的超时会中途放弃等待（放弃后可再从 AMO 侧取包，但要手工核对）。
+- 凭据通过命令行传入，**不进任何文件、不打印**；事后应 Revoke 轮换（见 J.7）。
+
+### J.3 时序与产物指纹
+
+| 时点 | 事件 |
+|---|---|
+| 2026-10-12 23:55:19 | 进程启动，`Building web extension from C:\Users\lhy\AppData\Local\Temp\lateron-amo-src` |
+| — | `Waiting for validation...` → `Waiting for approval...` |
+| 2026-10-13 00:01:52 | `Signed xpi downloaded: …\web-ext-artifacts\d64cd310169e472eab7c-1.66.1.xpi`，**退出码 0** |
+
+| 产物 | 大小 | 文件数 | SHA-256 |
+|---|---|---|---|
+| 输入 `LaterOn-1.66.1-firefox-amo-unsigned.xpi` | 498924 | 37 | `4B2674AAC5DB40225E7AEFCF3531CE18292BB82E11E0F5034793A509A3BDF8B6` |
+| **输出（AMO 回签）** `LaterOn-1.66.1-firefox-amo.xpi` | **518829** | **42** | `E154AC5A67B6F1123BB2473387C5CACC1C2115CE4539B2C0B05A81CAE8277524` |
+
+落盘文件名 `d64cd310169e472eab7c-1.66.1.xpi` 的前缀是 **AMO 内部的扩展标识**，不是扩展 ID、也不是内容哈希；**改文件名不影响签名**。
+
+### J.4 包内复核（签名只追加签名块）
+
+- `META-INF/` 下 5 个文件齐全：`manifest.mf`、`mozilla.sf`、**`mozilla.rsa`（4379 字节，签名块本体）**、`cose.manifest`、`cose.sig`（COSE 签名，供 Firefox 140+ 使用）。
+- 其余 37 个文件与输入包一一对应；`LICENSE` 在。
+- `manifest.json` 复核：`gecko.id` = `lateron-ff-port-695d5826@lhy.local`、`strict_min_version` = `140.0`、`data_collection_permissions` = `{"required":["none"]}`；`_locales/zh_CN|en` 的 `extensionName`/`actionTitle` 仍是第八棒的新值 —— **签名没有改动任何内容字段**。
+- AMO 侧副作用：该扩展条目在本次提交时被**自动创建**（此前 `GET /api/v5/addons/addon/<id>/` 返回 404），对应 web-ext 源码里的 `POST addon/` 分支；此后同一 ID 再提交即为「新版本」。
+
+### J.5 发布面（Release 附件替换）
+
+- Release `v1.66.1-ff-port`（id `409797272`）的附件 `LaterOn-1.66.1-firefox-amo.xpi` 由 498924 的未签名包**替换为 518829 的签名包**（保持同名，下载链不变）；另一个附件 `LaterOn-1.66.1-firefox.xpi`（498891，未签名）保持不变。
+- 未签名输入件留在仓库：`dist/LaterOn-1.66.1-firefox-amo-unsigned.xpi`（下次重新签名的输入），**不进 Release**。
+- Release 正文同步改写：附件表补「AMO 已签名 / 42 文件 / 签名块」、永久安装改写为 `about:addons` → 齿轮 → 「从文件安装附加组件」四步、新增「AMO 签名记录（2026-10-13）」表与凭据轮换提醒。
+- 下载校验（经本机代理下载 Release 附件）：`200 / 518829 字节 / SHA256 E154AC5A…7524`，与本地成品**逐字节一致**。
+
+### J.6 质量结论
+
+- **代码与构建脚本零改动**：这一棒只动文档与 Release 附件 —— `work/` 下源码、`manifest.firefox.json`、`scripts/build-release.py` 均未变。
+- 因此第八棒的回归与静态检查结论**原样沿用**：53 项测试 **51/53**（2 个失败是上游自带）、两个 Firefox 变体 addons-linter **errors 0 / warnings 7**（条目不变）。签名版未再跑 addons-linter，因为 linter 只吃源码目录、签名块不在其检查范围（manifest 与文件集与输入包一致，仅多 `META-INF/`）。
+
+### J.7 仍未做 / 风险
+
+1. **正式版「从文件安装」需人工点一次**：无头环境无法替代这个交互，本附录只证明包内**有** Mozilla 签名块且结构正确。
+2. **unlisted 不会自动更新**：用户装了签名包后收不到新版本，需要自建 `update_url`（`AMO签名操作指南.md` §9）或让用户手动换包。
+3. **凭据轮换**：本轮签名用的 AMO API key（JWT issuer / secret）已经出现在对话记录里，**应当 Revoke 后重新生成**（<https://addons.mozilla.org/developers/addon/api/key/>）；旧凭据失效不影响已签名的扩展。
+4. **A-01~A-07 有头人工点验仍未做**（`UI-人工点验清单.md`），与签名相互独立。
+5. 可供日后复用：`AMO签名操作指南.md` §7.1 与附录 C.2 是同一批实测数据的对外版；发布口径见 `github/port-docs/RELEASE-v1.66.1-ff-port.md`。
