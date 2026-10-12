@@ -37,6 +37,8 @@
   - **路线 A（网页）**：<https://addons.mozilla.org/developers/> → 提交新附加组件 → **On your own / unlisted** → 上传该 `.xpi` → 下载已签名包。
   - **路线 B（命令行）**：把该 `.xpi` 解压成目录后 `web-ext sign --source-dir <目录> --artifacts-dir dist\signed --channel unlisted --api-key <key> --api-secret <secret>`（**不要**直接用仓库根目录当 `--source-dir`，那会把 `node_modules` 打进去）。
   - **前置条件**：AMO 账号必须已开 **2FA**（否则拿不到 API key）；扩展 ID 已固定为 `lateron-ff-port-695d5826@lhy.local`，签名后不可更改。
+  - **逐步照做版**：[`port-docs/AMO签名操作指南.md`](./AMO签名操作指南.md) —— 从注册 2FA、取 API key、准备 37 文件源目录、改名（**必须在签名之前**）、两条签名路线，到用 `META-INF/mozilla.rsa` 校验签名、替换本 Release 附件、故障排查表，一页一命令。
+  - **注意**：签名包**改一个字节即失效**；本 Release 目前两个附件**都还没有签名块**，所以正式版只能临时装载或自己签一遍。
 
 ## 本版做了什么
 

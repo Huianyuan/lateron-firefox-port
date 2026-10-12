@@ -128,6 +128,8 @@ python scripts/build-release.py --target firefox --amo   # → dist/LaterOn-1.66
 
 签名前建议先自查：`npx addons-linter dist/LaterOn-1.66.1-firefox-amo.zip` 应为 **0 error / 7 warning**（那 7 条见下「构建与测试」）。
 
+> **完整的、可逐步照做的签名指南见 [`port-docs/AMO签名操作指南.md`](port-docs/AMO签名操作指南.md)**：账号 2FA → API key → 准备 37 文件源目录 → 改名（**必须排在签名之前**）→ 两条签名路线 → 用 `META-INF/mozilla.rsa` 校验签名 → 替换 Release 附件 → 故障排查表。上面两条路线是它的摘要版。
+
 ---
 
 ## 构建与测试
@@ -193,7 +195,8 @@ npx web-ext run --source-dir <解包目录> --firefox <firefox 可执行文件> 
 
 | 文件 | 内容 |
 |---|---|
-| `Firefox-适配技术方案.md` | **施工级技术方案**（3496 行）：可行性论证、逐文件改动设计、12 个清单变体的 addons-linter 实测矩阵、验收清单、附录 **F** 施工实测记录、附录 **G** AMO 签名版（dcp）实现与签名两条路线 |
+| `Firefox-适配技术方案.md` | **施工级技术方案**（3607 行）：可行性论证、逐文件改动设计、12 个清单变体的 addons-linter 实测矩阵、验收清单、附录 **F** 施工实测记录、附录 **G** AMO 签名版（dcp）实现与签名两条路线、附录 **H** 上游改用 MIT 后的合并/重打包/重新发布 |
+| `AMO签名操作指南.md` | **AMO 签名全流程（可执行版）**（306 行）：2FA / API key / 准备可签名源目录 / 改名（签名前）/ `web-ext sign` 与网页上传两条路线 / 校验 `META-INF/mozilla.rsa` / 替换 Release 附件 / 变更管理与故障排查表；头部声明哪些步骤已实测、哪些依据官方文档 |
 | `UI-人工点验清单.md` | **有头人工点验的操作脚本**：附录 F.6 那 7 项逐条给出「为什么无头测不了 / 代码位置 / 操作 / 通过判据 / 失败特征 / 记录字段」，含前置命令与记录模板 |
 | `Firefox-适配方案.md` | 早期可行性分析（工作量与风险清单） |
 | `LaterOn-项目分析.md` | 上游项目结构/架构分析 |

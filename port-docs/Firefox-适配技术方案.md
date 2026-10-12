@@ -3486,6 +3486,10 @@ D:\ALL_Python\python312\python312.exe scripts\build-release.py --target firefox 
 
 ### G.9 AMO 签名步骤
 
+> **2026-10-12 更新（第七棒）**：本节是**概要版**，已细化为独立可执行文档 [`AMO签名操作指南.md`](AMO签名操作指南.md)（306 行，含逐条命令、期望输出、完成判据、校验签名的方法、Release 附件替换、故障排查表）。下面两处按该文档的实测结论修正：
+> ① 下方路线 B 用 `Expand-Archive` 解的是 **`.zip`**（`Expand-Archive` 只认 `.zip` 后缀，对 `.xpi` 会报错；指南 §3 改用 `python` 的 `zipfile` 直接解 `.xpi`）；
+> ② `web-ext sign` 还支持 `--approval-timeout`（毫秒，**设 0 = 提交后不等结果**）、`--no-input`、`--api-proxy`、`--amo-metadata`；本机实测 **AMO 直连可用、不需要代理**，且 `web-ext sign` 在扩展尚未在 AMO 建过条目时**会自动创建**（源码 `submit-addon.js:169` 的 `POST addon/`，注释「it's the indication that a new add-on should be created, rather than a new version」）。
+
 **前置条件**（三条都必需）：
 
 1. AMO 账号已开启 **2FA**（2021-03-15 起强制，未开无法登录开发者后台、也无法生成 API key）；
@@ -3498,7 +3502,7 @@ D:\ALL_Python\python312\python312.exe scripts\build-release.py --target firefox 
 2. 「提交新附加组件」→ 选择 **On your own / unlisted**（自托管，不上架公开目录）；
 3. 上传 `dist/LaterOn-1.66.1-firefox-amo.xpi`；
 4. 等待自动签名完成，从提交页下载**已签名的 xpi**（文件名形如 `lateron-ff-port-...xpi`）；
-5. 装法：`about:config` 里把 `xpinstall.signatures.required` 设为 `false`（仅 Nightly/Developer Edition 可靠），或直接用「从文件安装」装已签名包——已签名包在正式版也可永久安装。
+5. 装法：**已签名的包在正式版 Firefox 里直接「从文件安装」即可永久安装**（`about:addons` → 齿轮 → 从文件安装附加组件），不需要改任何 `about:config`；`xpinstall.signatures.required=false` 只对**未签名**包在 Nightly/Developer Edition/ESR 上有用。
 
 **路线 B · 命令行 `web-ext sign`**（本机 web-ext 8.10.0 实测支持这些参数）
 
