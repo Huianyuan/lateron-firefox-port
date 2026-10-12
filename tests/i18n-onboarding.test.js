@@ -52,6 +52,8 @@ for (const locale of ["zh_CN", "en"]) {
     assert.ok(messages[key]?.message, `${locale} 缺少 ${key}`);
   }
 }
-assert.strictEqual(JSON.parse(read("_locales/zh_CN/messages.json")).extensionName.message, "LaterOn · 项目型网页管理");
+// 上游断言的是官方名 "LaterOn · 项目型网页管理"；本移植版按上游 README 的要求
+// 「区分社区版与官方版」把显示名改为下面这个，故该断言随移植一并更新。
+assert.strictEqual(JSON.parse(read("_locales/zh_CN/messages.json")).extensionName.message, "LaterOn 社区移植版 · 项目型网页管理");
 
 console.log("PASS 英文词典、扩展清单和可重复新手引导均已接入");
