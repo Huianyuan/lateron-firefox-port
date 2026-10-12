@@ -14,6 +14,22 @@ LaterOn 是一个「项目型网页管理」扩展：把浏览到的网页按项
 
 ---
 
+## 下载与安装（先看这里）
+
+Release 页：[v1.66.1-ff-port](https://github.com/Huianyuan/lateron-firefox-port/releases/tag/v1.66.1-ff-port)。**先看自己属于哪一行，只下对应的那一个附件**：
+
+| 你的 Firefox | 下哪个附件 | 怎么装 | 装完的效果 |
+|---|---|---|---|
+| **140 及以上**（正式版 / Beta / ESR） | **`LaterOn-1.66.1-firefox-amo.xpi`**（518829 B，**AMO 已签名**） | `about:addons` → 右上齿轮 ⚙ → **「从文件安装附加组件…」** → 选它（**不要解压**） | **永久安装**，重启仍在 |
+| **115–139** | `LaterOn-1.66.1-firefox.xpi`（498891 B，未签名） | 解压到空目录 → `about:debugging#/runtime/this-firefox` → 「临时载入附加组件…」→ 选目录里的 `manifest.json` | 临时载入，**重启失效** |
+| Nightly / Developer Edition（想装未签名包） | `LaterOn-1.66.1-firefox.xpi` | `about:config` 里把 `xpinstall.signatures.required` 设为 `false`，再把它拖进 Firefox | 永久安装（正式版不支持这条路） |
+
+- **装完怎么用**：点工具栏的 LaterOn 图标 → 右侧打开侧栏 → 在侧栏里把当前页保存进某个项目。首次看不到图标时，点扩展菜单（拼图图标）把 LaterOn 固定到工具栏。
+- 为什么有两个包：`data_collection_permissions` 这个键**只有 Firefox 140+ 才认**，而 AMO 自 2025-11-03 起对新扩展强制要求 —— 所以签名版走 140、日常版保 115，**一份源码两个产物**。
+- 想用 Chrome / Edge 对照原版：Release 里没有 Chrome 包，用 `python scripts/build-release.py` 自行构建（见「构建与测试」）。
+
+---
+
 ## 来源与授权（请先读）
 
 - **上游项目**：<https://github.com/gaoyiiiii/LaterOn>（LaterOn，作者 gaoyiiiii，提交署名 yi <yi@jueji.me>）
@@ -85,7 +101,9 @@ LaterOn 是一个「项目型网页管理」扩展：把浏览到的网页按项
 
 ---
 
-## 安装
+## 安装（详细说明）
+
+> 只想赶紧装上？看上文「下载与安装」那张表，正式版三步即可。下面是每种方式的可复制细节与各自的前提。
 
 ### 方式一：临时装载（最快，适合自用试用）
 

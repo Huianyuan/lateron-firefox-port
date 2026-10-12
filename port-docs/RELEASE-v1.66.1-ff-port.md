@@ -1,5 +1,15 @@
 # Release v1.66.1-ff-port · LaterOn Firefox 适配版
 
+## 怎么装（先看这张表）
+
+| 你的 Firefox | 下哪个附件 | 步骤 |
+|---|---|---|
+| **140 及以上**（正式版 / Beta / ESR） | **`LaterOn-1.66.1-firefox-amo.xpi`**（**AMO 已签名**，518829 B） | ① 下载（**不要解压**）② `about:addons` → 齿轮 ⚙ → 「从文件安装附加组件…」 ③ 确认权限与「不收集任何数据」提示 → **永久生效，重启仍在** |
+| **115–139** | `LaterOn-1.66.1-firefox.xpi`（未签名，498891 B） | ① 解压到空目录 ② `about:debugging#/runtime/this-firefox` → 「临时载入附加组件…」 ③ 选目录里的 `manifest.json`（**重启失效**） |
+| Nightly / Developer Edition / ESR | `LaterOn-1.66.1-firefox.xpi` | `about:config` → `xpinstall.signatures.required = false` → 拖入安装 |
+
+> 用起来：点工具栏 LaterOn 图标 → 右侧打开侧栏 → 把当前页按项目收进库。**`.xpi` 就是一个 ZIP**，签名包的签名块在 `META-INF/mozilla.rsa`，改一个字节即失效，所以别解压着装。
+
 > **2026-10-13 更新**：`LaterOn-1.66.1-firefox-amo.xpi` 已由 **AMO 签名（unlisted）**，包内带 `META-INF/mozilla.rsa`，**正式版 Firefox 可以「下载即永久安装」**；另一个 `LaterOn-1.66.1-firefox.xpi` 仍为未签名临时载入版。
 
 基于上游 **LaterOn v1.66.1**（commit `00fde27be93656d650ac5c52adc2684d511adb53`）+ 上游 **`a1a5313`**（2026-10-12 采纳 MIT 协议、并在发行包里带上 `LICENSE`）的 Firefox（Manifest V3）社区移植版。
