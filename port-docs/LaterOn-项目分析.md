@@ -6,6 +6,8 @@
 > **分析日期**：2026-10-11
 > **证据基础**：三份逐行取证笔记 [`notes-background.md`](notes-background.md)、[`notes-content-scripts.md`](notes-content-scripts.md)、[`notes-ui.md`](notes-ui.md) + 本机对 manifest、打包脚本、测试目录的直接核对
 > **行号约定**：下文所有 `文件:行号` 均相对 `repo/`，对应上表归档点
+>
+> **协议状态更新（2026-10-12）**：上游随后推送 `a1a5313` 采纳 **MIT 协议**（新增根目录 `LICENSE`，README 增加「开源协议」章节，GitHub `license` 字段现为 `MIT`）。本报告第 0 节「前提 1」、能力清单里的「许可证」行，以及末尾结论表中关于「无许可证 ⇒ 法律上不可再分发」的两行，记录的都是 **2026-10-11 当时**的状态，**结论已作废**；现行口径见 [`Firefox-适配技术方案.md`](Firefox-适配技术方案.md) 第 2.0 节与附录 H。
 
 ---
 

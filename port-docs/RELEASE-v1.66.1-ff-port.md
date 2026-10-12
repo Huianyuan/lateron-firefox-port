@@ -1,16 +1,18 @@
 # Release v1.66.1-ff-port · LaterOn Firefox 适配版（未签名）
 
-基于上游 **LaterOn v1.66.1**（commit `00fde27be93656d650ac5c52adc2684d511adb53`）的 Firefox（Manifest V3）个人移植版。
-**非官方、未获上游授权**（上游无 LICENSE）。仅个人自用，请勿再分发。
+基于上游 **LaterOn v1.66.1**（commit `00fde27be93656d650ac5c52adc2684d511adb53`）+ 上游 **`a1a5313`**（2026-10-12 采纳 MIT 协议、并在发行包里带上 `LICENSE`）的 Firefox（Manifest V3）社区移植版。
+**上游已采用 [MIT License](https://github.com/gaoyiiiii/LaterOn/blob/main/LICENSE)**（`Copyright (c) 2026 yiiiii`），本仓库同样以 MIT 发布：两个包内都已包含 `LICENSE`，再分发时请保留该文件与版权声明，并注明这是基于 LaterOn 的**非官方社区移植版**（上游 README 的明文要求）。
 
 ## 附件（两个包，按用途选一个）
 
 | 文件 | 用途 | 大小 | 最低 Firefox | SHA-256 |
 |---|---|---|---|---|
-| `LaterOn-1.66.1-firefox.xpi` | **日常用这个**：`about:debugging` 临时载入 | 498065 字节 | 115 | `F2A5D3CC5F31B08228DF71D18795B0370024FE8993EDD1C49AA268C629423046` |
-| `LaterOn-1.66.1-firefox-amo.xpi` | **提交 AMO 签名用**（已声明 `data_collection_permissions`） | 498098 字节 | 140 | `34B951EA655FCA4819F61078753E3854306C8CB530D8B8DBB67383841F77A698` |
+| `LaterOn-1.66.1-firefox.xpi` | **日常用这个**：`about:debugging` 临时载入 | 498779 字节 | 115 | `C826F4F41508CB444BAC53454543D04E0B21B36A788C133756BFC5D16C5B19C8` |
+| `LaterOn-1.66.1-firefox-amo.xpi` | **提交 AMO 签名用**（已声明 `data_collection_permissions`） | 498812 字节 | 140 | `6DCA6DEC48AB4FA3AFCE8DC316173DFA6069115D9E0D5FC82F455D79A6909C9E` |
 
-两个包都是 36 个文件，除 `manifest.json` 里的 `strict_min_version` 与 `data_collection_permissions` 外内容完全相同。
+两个包都是 **37 个文件**（含上游 `LICENSE`），除 `manifest.json` 里的 `strict_min_version` 与 `data_collection_permissions` 外内容完全相同。
+
+> 2026-10-12 因上游改为 MIT 协议（提交 `a1a5313`）重新打包：文件数 36 → 37，两个附件均已**替换**，旧的大小与哈希已作废。
 
 > `.xpi` 就是一个 ZIP，可以直接解压查看内容；`manifest.json` 里能看到 Firefox 专用键（`sidebar_action`、`browser_specific_settings.gecko`）。
 

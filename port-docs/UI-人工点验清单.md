@@ -25,7 +25,7 @@
 ## 2. 前置准备（约 3 分钟）
 
 ```powershell
-# 1) 出包（干净 36 文件目录，不要直接用 -s work，否则 node_modules 会被打进临时扩展）
+# 1) 出包（干净 37 文件目录，不要直接用 -s work，否则 node_modules 会被打进临时扩展）
 cd F:\ALL_AI\小助理\open-source-collection\lateron-firefox-port\work
 D:\ALL_Python\python312\python312.exe scripts\build-release.py --target firefox
 

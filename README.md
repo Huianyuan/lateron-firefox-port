@@ -5,7 +5,7 @@ LaterOn 是一个「项目型网页管理」扩展：把浏览到的网页按项
 
 | | |
 |---|---|
-| 本版基线 | LaterOn **v1.66.1**（上游 commit `00fde27be93656d650ac5c52adc2684d511adb53`） |
+| 本版基线 | LaterOn **v1.66.1**（上游 commit `00fde27be93656d650ac5c52adc2684d511adb53`）+ 上游 **`a1a5313`**（2026-10-12 采纳 MIT、打包含 LICENSE，已 merge 进本仓库） |
 | 本版形态 | 未签名 XPI（WebExtension，Manifest V3），两个变体：**日常版** `strict_min_version: 115.0`；**AMO 签名版** `strict_min_version: 140.0` + `data_collection_permissions: {"required": ["none"]}` |
 | 适配方式 | 用独立清单 `manifest.firefox.json` + 一个转接垫片 `ff-sidebar.js`，**不改 `background.js` 业务逻辑** |
 | 移植前基线 | 原版测试 51/53 通过（2 个上游既有失败，见下）；addons-linter **0 error / 7 warning** |
@@ -14,14 +14,15 @@ LaterOn 是一个「项目型网页管理」扩展：把浏览到的网页按项
 
 ---
 
-## ⚠️ 来源与授权（请先读）
+## 来源与授权（请先读）
 
-- **上游项目**：<https://github.com/gaoyiiiii/LaterOn>（LaterOn，作者 gaoyiiiii）
-- **本版基线**：上游 **v1.66.1**，commit `00fde27be93656d650ac5c52adc2684d511adb53`（branch `main`）
-- **上游没有 LICENSE 文件**，GitHub 上的 license 字段为 `null`（即默认「保留所有权利」，未授予任何开源许可）。
-- 因此：**本仓库是非官方个人移植，未获上游作者授权**，版权归上游作者。本仓库仅用于个人学习与自用；请勿商业使用、请勿再分发。若上游作者提出异议，本仓库将立即下架或转为私有。
-- 本仓库**不是**上游官方仓库，也**不是** GitHub Fork 关系（虽然保留了上游的提交历史，方便逐行对照；网络图上不会显示 fork 关系）。
-- 本仓库不含上游 `.git` 之外的任何第三方代码；运行时代码全部来自上游 v1.66.1。
+- **上游项目**：<https://github.com/gaoyiiiii/LaterOn>（LaterOn，作者 gaoyiiiii，提交署名 yi <yi@jueji.me>）
+- **本版基线**：上游 **v1.66.1**（commit `00fde27be93656d650ac5c52adc2684d511adb53`）+ 上游 license 提交 **`a1a5313`**（2026-10-12，其父提交就是 v1.66.1）
+- **上游已采用 MIT 协议**：2026-10-12 上游推送 `a1a5313`「License LaterOn under MIT and include notice in release packages」，新增根目录 `LICENSE`（MIT，`Copyright (c) 2026 yiiiii`）、在 README 增加「开源协议」章节、并让打包脚本把 `LICENSE` 放进每个发行包。GitHub API 现在返回 `license.spdx_id = "MIT"`（此前为 `null`）。
+- **本仓库已合并该提交**（merge commit `36f01c9`，用 merge 而非 rebase，见仓库 git 历史）：根目录 `LICENSE` 与上游**逐字节一致**，`scripts/build-release.py` 也已把 `LICENSE` 列为发行包必需文件 —— 三个产物均含 `LICENSE`。
+- **上游明确欢迎社区移植**：其 README「开源协议」章节写明允许使用、修改、移植、再发布及商业使用，同时要求**注明原项目与修改内容、区分社区版与官方版**。本仓库正是照此做的。但它**不是**上游官方仓库，也**不是** GitHub Fork 关系（保留了上游提交历史便于逐行对照，网络图上不显示 fork 关系）。
+- 本仓库的移植改动同样以 **MIT** 发布（见根目录 [`LICENSE`](LICENSE)）。MIT 不授予商标权，`LaterOn` 名称与图标权利仍属上游；`tests/fixtures/` 中的第三方网页内容仍归原权利人，不因 MIT 获得额外授权。
+- 本仓库不含上游之外的任何第三方运行时代码。
 
 ---
 
@@ -31,12 +32,13 @@ LaterOn 是一个「项目型网页管理」扩展：把浏览到的网页按项
 
 ### 差异总览
 
-- **改动 8 个既有文件**，新增 6 项（`ff-sidebar.js`、`manifest.firefox.json`、`package.json`、`package-lock.json`、`README.upstream.md`、`port-docs/`）。
-- **`background.js` 一个字节都没改**（上游最大的文件，1706 行）——Firefox 侧的兼容靠垫片在运行前注入，而不是改业务代码。
-- 逐行差异可随时复查：
+- **改动 8 个既有文件**，新增 7 项（`ff-sidebar.js`、`manifest.firefox.json`、`package.json`、`package-lock.json`、`README.upstream.md`、`port-docs/`、`LICENSE` —— `LICENSE` 来自上游 `a1a5313`，不是本次移植写的）。
+- **移植代码改动面**（对当前上游 `a1a5313`，不含对外 README 与工具链）：**10 文件 / +509 −44**，其中新增 2 个文件（`ff-sidebar.js` 127 行、`manifest.firefox.json` 92 行）。**`background.js` 一个字节都没改**（上游最大的文件，1706 行）——Firefox 侧的兼容靠垫片在运行前注入，而不是改业务代码。
+- 逐行差异可随时复查（`a1a5313` = 当前上游 HEAD，含 MIT 协议提交；`v1.66.1` 是移植前的基线 tag）：
 
   ```bash
-  git diff v1.66.1 HEAD -- . ':(exclude)port-docs'
+  git diff a1a5313 HEAD -- . ':(exclude)port-docs'    # 相对当前上游的全部差异
+  git diff v1.66.1 HEAD -- . ':(exclude)port-docs'    # 相对移植前基线（含上游 LICENSE 提交）
   ```
 
 ### 逐文件差异
@@ -51,7 +53,8 @@ LaterOn 是一个「项目型网页管理」扩展：把浏览到的网页按项
 | `library.js` | ① 顶部加垫片兜底（忠实转发，不改变 Chrome 行为，`canOpen` / `canClose` 用 getter）；② `openItem` 里做手势预热；③ `openSidePanel(windowId, earlyPanelOpen)` 支持「已提前打开」的分支 | Firefox 的 `sidebarAction.open()` 必须在用户手势的同步调用链里发起，而上游是在 `await` 之后才调用 → 需要在点击回调里提前把侧栏打开 |
 | `sidepanel.js` | 关闭侧栏、跨窗口打开侧栏的路径改走垫片；保留 Chrome 原行为 | 同上 |
 | `settings.js` / `i18n.js` | 内置翻译（Chrome 的 `Translator` / `LanguageDetector`）在缺 API 时**降级隐藏**而不是报错；文案改为浏览器中立 | Firefox 没有 Chrome 内置翻译 API |
-| `scripts/build-release.py` | 加 `--target {chrome,firefox}`；Firefox 目标校验 Firefox 清单键 | 一个脚本出两种包，且拒绝把 Chrome 键打进 Firefox 包 |
+| `scripts/build-release.py` | 加 `--target {chrome,firefox}` + `--amo`；Firefox 目标校验 Firefox 清单键；`RUNTIME_FILES` 首位加入 `"LICENSE"` | 一个脚本出两种包，且拒绝把 Chrome 键打进 Firefox 包；MIT 要求分发时携带协议全文 |
+| `LICENSE` | **来自上游**（`git merge a1a5313`，非本次移植所写）；构建时进包 | 上游 2026-10-12 采纳 MIT，分发衍生版必须保留版权声明与协议全文 |
 
 ### 清单（manifest）差异
 
@@ -102,7 +105,7 @@ LaterOn 是一个「项目型网页管理」扩展：把浏览到的网页按项
 
 ### 方式三：正式版永久安装（需要 AMO 签名）
 
-正式版只认 Mozilla 签名的包。**不需要手改清单** —— 本仓库的打包脚本已经能直接产出「签名专用包」`dist/LaterOn-1.66.1-firefox-amo.zip`（= Release 附件 `LaterOn-1.66.1-firefox-amo.xpi`，498098 字节），它已声明 `"data_collection_permissions": {"required": ["none"]}` 并把 `strict_min_version` 设为 `140.0`：
+正式版只认 Mozilla 签名的包。**不需要手改清单** —— 本仓库的打包脚本已经能直接产出「签名专用包」`dist/LaterOn-1.66.1-firefox-amo.zip`（= Release 附件 `LaterOn-1.66.1-firefox-amo.xpi`，498812 字节，37 文件，含上游 `LICENSE`），它已声明 `"data_collection_permissions": {"required": ["none"]}` 并把 `strict_min_version` 设为 `140.0`：
 
 ```bash
 python scripts/build-release.py --target firefox --amo   # → dist/LaterOn-1.66.1-firefox-amo.zip
@@ -113,7 +116,7 @@ python scripts/build-release.py --target firefox --amo   # → dist/LaterOn-1.66
 两条签名路线（都需要 Mozilla 账号，且**必须开启 2FA**）：
 
 - **网页**：<https://addons.mozilla.org/developers/> → 提交新附加组件 → 选 **「On your own / 自托管（unlisted）」** → 上传 `LaterOn-1.66.1-firefox-amo.xpi` → 下载签名的 `.xpi`；
-- **命令行**（把 `-s` 指向**解包后的 36 文件干净目录**，不要指向仓库根目录，否则 `node_modules` 会被一起打包）：
+- **命令行**（把 `-s` 指向**解包后的 37 文件干净目录**，不要指向仓库根目录，否则 `node_modules` 会被一起打包）：
 
   ```bash
   unzip -o dist/LaterOn-1.66.1-firefox-amo.zip -d /tmp/lateron-amo
@@ -167,6 +170,7 @@ npx web-ext run --source-dir <解包目录> --firefox <firefox 可执行文件> 
 
 ```
 .
+├── LICENSE                    # 上游 MIT 协议全文（来自上游 a1a5313，随每个发行包分发）
 ├── manifest.json              # Chrome 清单（原样保留，打 Chrome 包时用）
 ├── manifest.firefox.json      # Firefox 清单（打 Firefox 包时改名为 manifest.json）
 ├── ff-sidebar.js              # ★ 唯一的 Firefox 专有运行时文件：sidePanel → sidebarAction 垫片

@@ -4,6 +4,8 @@
 > **代码基线**：`repo/` @ `00fde27be93656d650ac5c52adc2684d511adb53`（v1.66.1）
 > **配套文件**：[`LaterOn-项目分析.md`](LaterOn-项目分析.md)（项目本身）、[`notes-background.md`](notes-background.md) / [`notes-content-scripts.md`](notes-content-scripts.md) / [`notes-ui.md`](notes-ui.md)（代码取证）、[`notes-firefox-platform.md`](notes-firefox-platform.md)（平台能力核查，每条带 MDN/BCD/Extension Workshop 出处）
 > **日期**：2026-10-11
+>
+> **协议状态更新（2026-10-12）**：上游随后推送 `a1a5313` 采纳 **MIT 协议**（新增根目录 `LICENSE`，并在 README 增加「开源协议」章节），GitHub `license` 字段现为 `MIT`。因此本文件 §0 与 §6 里「仓库没有 LICENSE / 先解决授权问题」的判断是 **2026-10-11 当时的事实**，**已不再适用**；完整执行记录见 [`Firefox-适配技术方案.md`](Firefox-适配技术方案.md) 第 2.0 节与附录 H。
 
 ---
 

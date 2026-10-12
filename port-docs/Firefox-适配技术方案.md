@@ -9,7 +9,16 @@
 - **目标项目**：LaterOn v1.66.1（Chrome/Edge MV3 侧栏网页收藏扩展，无后端、零 `fetch` 依赖）
 - **基线归档点**：`repo/`，git HEAD `00fde27be93656d650ac5c52adc2684d511adb53`
 - **本文档所有行号均对应上述归档点**；上游更新后行号可能漂移，请先用第 4.7 节的校验命令确认。
-- **文档版本**：v1.0（2026-10-11）
+- **文档版本**：v1.0（2026-10-11）；**v1.1 协议状态更新（2026-10-12）**
+
+> ⚠️ **协议状态已变更（2026-10-12）**：上游 `gaoyiiiii/LaterOn` 已采纳 **MIT 协议**（提交 `a1a5313`：新增根目录 `LICENSE`、README 增加「开源协议」章节、打包脚本把 `LICENSE` 放进发行包），GitHub 的 `license` 字段现为 `MIT`（此前是 `null`）。
+> 因此**本文档第 2 章、第 5.3 节、第 11 章、第 12 章、第 13.2 节 R-19，以及附录 F/G 中凡以「无 LICENSE / 未获授权不得分发」为前提的段落，一律以本状态更新为准**：那些文字记录的是 2026-10-11 的事实，**不再代表当前状态**。协议变更的完整执行记录见 **附录 H**。
+>
+> 口径变化摘要（四条）：
+> 1. 分发（含上 AMO）**不再需要**单独向作者申请书面授权，只需保留 `LICENSE` 与版权声明、注明基于上游并区分社区版/官方版（上游 README 的明文要求）；
+> 2. 第 **2.4 节**的授权申请模板**不需要发送**（保留在文中仅作历史记录）；
+> 3. 第 5 章 H/F 配置的选取**不受影响** —— H 依然是默认（115 覆盖面大），AMO 版仍需把 `strict_min_version` 抬到 140；
+> 4. 附录 **F.1** 与 **G.4** 的文件数/字节数/SHA256 因「包内新增 `LICENSE`」而**全部作废**，现行值见 **H.4**（36 → 37 文件）。
 
 ---
 
@@ -117,9 +126,25 @@ P1/P2 是体验与回归对齐，P3 是发布。**如果你只有半天，做 P0
 
 ## 2. 法务前置（动工前必须先读完）
 
+### 2.0 协议状态更新（2026-10-12，覆盖以下 2.1–2.4）
+
+**上游已采纳 MIT 协议**：提交 `a1a5313`「License LaterOn under MIT and include notice in release packages」（父提交即本文档基线 `00fde27`）新增根目录 `LICENSE`（MIT，`Copyright (c) 2026 yiiiii`），并在上游 README 增加「开源协议」章节。
+
+下面 2.1–2.4 是 **2026-10-11 当时**的事实与建议，**其中三条已不再需要执行**：
+
+| 小节 | 2026-10-11 的口径 | 现在的口径 |
+|---|---|---|
+| 2.1 事实 | 「没有 LICENSE，`license: null`」 | **已过时**：上游新增 MIT `LICENSE`，GitHub `license = MIT` |
+| 2.2 分支 b | 「取得书面授权后发布」 | **不再需要单独授权**：保留 `LICENSE` + 署名 + 区分社区版/官方版即可分发（含上 AMO） |
+| 2.4 申请模板 | 「可直接复制发 issue」 | **不要发送**（保留在文中仅作历史记录） |
+
+分支 a/b 的技术差异（走配置 H 还是 F）**仍然有效**，理由见第 5 章。完整执行记录（合并、重打包、新哈希、回归）见 **附录 H**。
+
 ### 2.1 事实
 
 **【实测】** `repo/` 内**没有任何 LICENSE / COPYING / LICENSE.md 文件**（仓库根 33 个运行时文件 + docs/ + tests/ + scripts/ + _locales/ + .gitignore 里都没有），上游 GitHub 的 `license` 字段为 `null`。
+
+> **2026-10-12 更新（这条已过时）**：上游随后推送 `a1a5313` 新增了 `LICENSE`（MIT），GitHub `license` 字段现为 `MIT`。下面 3 条「不得分发」的结论随之作废，改为「保留 `LICENSE` 与版权声明 + 署名 + 区分社区版/官方版」的合规义务。见第 2.0 节与附录 H。
 
 **含义**：默认版权归原作者，**未获得授权不得分发衍生版本**——包括：
 
@@ -529,6 +554,8 @@ git -C repo rev-parse HEAD
 **理由**（这是本文档最重要的一个工程判断，请不要随手改）：
 
 - 无 LICENSE ⇒ 法律上不能分发（第 2.1 节）⇒ **AMO 这条线现在根本用不上**，为一个用不上的门槛把最低版本从 115 抬到 140，是纯粹的损失：115 ESR 覆盖大量长期支持用户，140 只覆盖新装用户。
+
+> **2026-10-12 更新**：本条的第一句前提（「无 LICENSE」）**已不成立** —— 上游已采纳 MIT（第 2.0 节），可自由分发。但**结论仍然采用默认 H**：H 的 115 覆盖面优势、以及「H 与 F 只差两个键」的切换成本分析都不依赖授权前提；要发 AMO 时再切 F 即可（附赠的 `--amo` 目标已经能一键产出 F 配置包）。
 - H 与 F **只差两个键**，切换成本接近零。所以先按 H 施工，等授权到手再改两个键重打包即可——**不需要为了"以后可能发 AMO"提前付代价**。
 - 两个配置的 linter 结论**完全等价**（都是 errors 0 / warnings 13），所以在 H 上做的所有验证对 F 都成立，反之亦然。
 
@@ -2823,7 +2850,7 @@ Expand-Archive dist\LaterOn-1.66.1-firefox.zip -DestinationPath ff -Force
 | **R-16** | 侧栏实际宽度与断点假设不符 | 见 A-10 / B-11 | 卡片布局错位、header 高度不对 | 中 | 调 `sidepanel.css:222-247` 的 `620px` 与 `sidepanel.js:74` 的 `TOPBAR_FALLBACK_H = 58`；纯样式改动，风险低 |
 | **R-17** | `alarms` 周期被舍入或拒建 | 见 A-18 / B-08 | 自动清理不按 12 小时跑 | 低 | 改为 `periodInMinutes: 1440`；不影响收藏主流程 |
 | **R-18** | `windows.create({focused:true})` 抛错 | 见 A-19 / B-19 | 「在新窗口打开全部」失败 | 低 | 去掉 `focused: true`（`library.js:2468`） |
-| **R-19** | **无 LICENSE 的分发风险** | 未取得作者书面授权就分发/上 AMO | 著作权侵权 | **确定存在（若忽视）** | §2 的两条分支：本地自用走 H 配置自签；要分发先拿授权再走 F 配置。**本方案不包含任何"替你决定分发"的动作** |
+| **R-19** | **无 LICENSE 的分发风险**（**2026-10-12 已消解**） | ~~未取得作者书面授权就分发/上 AMO~~ 上游已采纳 MIT（提交 `a1a5313`） | ~~著作权侵权~~ 只余「保留 `LICENSE` 与版权声明、注明基于上游、区分社区版/官方版」的合规义务 | **低**（原为「确定存在」） | 第 2.0 节与附录 H：包内必须带 `LICENSE`（构建脚本已强制），再分发保留协议全文即可；**本方案仍不包含任何"替你决定发布"的动作** |
 | **R-20** | 上游版本升级导致行号漂移、合并冲突 | 上游发新版，`repo/` 归档点变了 | 本文档里的行号引用全部失效 | 中（时间越久越高） | §4.7 的漂移校验命令；升级时以 `repo/` 实际内容为准（**这也是 §0.1 说明"以实际为准"的原因**） |
 | **R-21** | addons-linter 的 warning 与真实运行时行为不一致 | 例如 `UNSUPPORTED_API` 只是静态扫描，不代表运行时一定失败 | 误判（以为某事一定不行） | 中 | 本文档只把 linter 结果当作**打包闸门**（errors=0），行为结论一律交 §12 的真浏览器验收；`UNSUPPORTED_API` 的 8 条已被本方案**有意保留或有意消除**，见 §7.1 与 §7.7 的取舍 |
 | **R-22** | `isFirefoxSidebar` 探测误判 | 某些环境既有 `chrome.sidePanel` 又有 `browser.sidebarAction` | 垫片选错实现路径 | 低 | 探测条件是 `!hasChromeSidePanel && !!sidebar`（§7.2）；Chrome 走 `chrome.sidePanel`，Firefox 走 `sidebarAction`，两者都满足时**优先 Chrome 路径**（保守选择，因为那是上游已测试的路径） |
@@ -3297,8 +3324,8 @@ Remove-Item -Recurse -Force "$base\work"; # 然后重跑 D.2
 
 | 指标 | 实测结果 |
 |---|---|
-| 交付产物 | `dist/LaterOn-1.66.1-firefox.xpi`（498065 字节，36 文件，SHA256 `F2A5D3CC5F31B08228DF71D18795B0370024FE8993EDD1C49AA268C629423046`） |
-| 附赠对照产物 | `dist/LaterOn-1.66.1-chrome.zip`（497984 字节，36 文件，`--target chrome` 同脚本产出，用于确认改造未破坏 Chrome 侧） |
+| 交付产物 | `dist/LaterOn-1.66.1-firefox.xpi`（**现行值（2026-10-12 加 `LICENSE` 后重打包）：498779 字节 / 37 文件 / SHA256 `C826F4F41508CB444BAC53454543D04E0B21B36A788C133756BFC5D16C5B19C8`**；本表原记 498065 字节 / 36 文件 / `F2A5D3CC5F31B08228DF71D18795B0370024FE8993EDD1C49AA268C629423046`，那一版包里还没有 `LICENSE`，详附录 H.4） |
+| 附赠对照产物 | `dist/LaterOn-1.66.1-chrome.zip`（**现行值：498698 字节 / 37 文件**，`--target chrome` 同脚本产出，用于确认改造未破坏 Chrome 侧；原记 497984 字节 / 36 文件） |
 | 施工副本 | `work/`（= `repo/` @ `00fde27be93656d650ac5c52adc2684d511adb53` 的 `git archive` 展开，99 文件）。**只有 `work/` 被修改**，`repo/` 全程只读（`git status --short` 为空） |
 | 单元测试 | 53 项逐个跑 = **51/53**，与施工前基线（`baseline-before.csv`）**逐条一致**；两个失败是上游 v1.66.1 自带的（`background-modules.test.js` 的 81138 > 80000 体积断言、`edit-item.test.js` 的"编辑后立刻重画卡片"） |
 | addons-linter | 对 FF 产物：**errors = 0 / warnings = 7 / notices = 0**（工具 addons-linter 10.14.0，明细见 F.4） |
@@ -3413,9 +3440,11 @@ D:\ALL_Python\python312\python312.exe scripts\build-release.py --target firefox 
 
 | 产物 | 文件数 | 字节 | SHA256 |
 |---|---|---|---|
-| Chrome 版 | 36 | 497984 | `CD72FF72CD14A8C67A8169E4BBF64E4DADDF865E1CD10E2A560409AB30582453` |
-| Firefox 直装版 | 36 | 498065 | `F2A5D3CC5F31B08228DF71D18795B0370024FE8993EDD1C49AA268C629423046` |
-| Firefox AMO 版 | 36 | 498098 | `34B951EA655FCA4819F61078753E3854306C8CB530D8B8DBB67383841F77A698` |
+| Chrome 版 | 36 → **37** | 497984 → **498698** | `CD72FF72…` → **`FDBC9C0C66A4596F62AD6A7074C587227BE84AF1255254D88B68417CAF241444`** |
+| Firefox 直装版 | 36 → **37** | 498065 → **498779** | `F2A5D3CC…` → **`C826F4F41508CB444BAC53454543D04E0B21B36A788C133756BFC5D16C5B19C8`** |
+| Firefox AMO 版 | 36 → **37** | 498098 → **498812** | `34B951EA…` → **`6DCA6DEC48AB4FA3AFCE8DC316173DFA6069115D9E0D5FC82F455D79A6909C9E`** |
+
+> 每行的左值是 2026-10-11/12 **首次**打包的结果，右值是 2026-10-12 上游改为 MIT、包内加入 `LICENSE` 后的**现行值**（详附录 **H.4**）。加 `LICENSE` 后 addons-linter 与测试数字**均未变化**（见 H.5）。
 
 - **确定性**：AMO 版连续两次构建哈希相同（脚本给归档写固定时间戳）。
 - **无污染**：改动脚本后重建的 Chrome 版与 Firefox 直装版，与改动前**已发布**的那两个文件**逐字节一致** → 本次改动是纯增量。
@@ -3473,7 +3502,7 @@ D:\ALL_Python\python312\python312.exe scripts\build-release.py --target firefox 
 
 ```powershell
 cd F:\ALL_AI\小助理\open-source-collection\lateron-firefox-port\work
-# 1) 先把 AMO 版解包成干净目录（36 文件；不要 -s work，否则 node_modules 会被打包）
+# 1) 先把 AMO 版解包成干净目录（37 文件，含 LICENSE；不要 -s work，否则 node_modules 会被打包）
 D:\ALL_Python\python312\python312.exe scripts\build-release.py --target firefox --amo
 $dst = "$env:TEMP\latoron-ff-amo"; Remove-Item $dst -Recurse -Force -ErrorAction SilentlyContinue
 Expand-Archive "dist\LaterOn-1.66.1-firefox-amo.zip" $dst
@@ -3494,3 +3523,83 @@ Expand-Archive "dist\LaterOn-1.66.1-firefox-amo.zip" $dst
 
 - **没有真的把包上传到 AMO**：需要账号 2FA 与 API key（等用户提供/自行执行），且这是不可逆的对外动作，应由用户确认后执行。
 - **A-01~A-07 的有头人工点验未做**：需要真实 GUI 会话与真人点击，按 `UI-人工点验清单.md` 执行。
+
+---
+
+## 附录 H · 上游采纳 MIT 协议后的合并与重新发布（2026-10-12 第六棒）
+
+> 本附录与附录 F/G 并列：**F** 记第一至三棒（施工 + 真机装载）、**G** 记第五棒（AMO 版 dcp 与人工点验清单）、**H** 记第六棒（上游 MIT → 合并 → 重打包 → 重新发布）。
+> **凡本附录与附录 F.1 / G.4 的文件数、字节数、SHA256 冲突，一律以本附录为准** —— F/G 记录的是「包里还没有 `LICENSE`」的时代。
+
+### H.1 触发与上游改动
+
+用户指令（m00991，verbatim）：**「原仓库已经做了开源协议声明，查询下，然后更新我们的仓库」**。
+
+上游 `gaoyiiiii/LaterOn` 于 2026-10-12 推送提交 **`a1a5313`「License LaterOn under MIT and include notice in release packages」**（作者 yi <yi@jueji.me>，**父提交就是本方案的基线 `00fde27`**），一次改了 3 个文件（+31 −1）：
+
+| 文件 | 改动 |
+|---|---|
+| `LICENSE` | **新增**（MIT 全文，`Copyright (c) 2026 yiiiii`，1063 字节 / 21 行） |
+| `README.md` | 追加「## 开源协议」章节：原创代码 MIT；允许使用/修改/移植/再发布/商业使用；分发须保留版权声明与协议全文；**明文欢迎社区做 Firefox 等移植版**，要求注明原项目与修改内容、区分社区版与官方版；MIT 不授予商标权；`tests/fixtures/` 第三方内容仍归原权利人 |
+| `scripts/build-release.py` | `RUNTIME_FILES` 元组**首位**加入 `"LICENSE"`，注释改为「Only extension runtime files and the required license notice belong in a release package.」 |
+
+GitHub API 复核：`license = {"key":"mit","name":"MIT License","spdx_id":"MIT"}`（此前为 `null`）。
+
+### H.2 本文档口径的变更（覆盖第 2 章等）
+
+| 旧口径（2026-10-11，仍留在正文中） | 新口径（2026-10-12 起） |
+|---|---|
+| 2.1「`repo/` 内没有任何 LICENSE」 | 上游已新增 MIT `LICENSE`；本仓库已合并 |
+| 2.2「分支 b：取得书面授权后发布」 | **不再需要**单独授权；保留 `LICENSE` + 署名 + 区分社区版/官方版即可 |
+| 2.4 授权申请模板 | **不要发送**（保留仅作历史记录） |
+| 5.3「无 LICENSE ⇒ 法律上不能分发 ⇒ AMO 用不上」 | 该前提作废；**H 仍是默认配置**，理由换成「覆盖面 + 切换成本」 |
+| 13.2 R-19「无 LICENSE 的分发风险 = 确定存在」 | 降级为「保留 `LICENSE` 与署名的合规义务」 |
+| 附录 F.1 / G.4 的文件数与哈希 | **作废**，现行值见 H.4 |
+
+### H.3 合并执行（可复现）
+
+```powershell
+cd F:\ALL_AI\小助理\open-source-collection\lateron-firefox-port\github
+# 本机 github.com:443 直连不通，必须逐命令带代理参数（不写进任何 git 全局配置）
+git -c http.proxy=http://127.0.0.1:7897 fetch https://github.com/gaoyiiiii/LaterOn.git main
+git merge --no-ff FETCH_HEAD -m "Merge upstream a1a5313: LaterOn 改为 MIT 协议（新增 LICENSE、README 开源协议章节、打包含 LICENSE）"
+```
+
+- **为什么用 merge 而不是 rebase**：本仓库前两个移植提交 `e11915f` / `eb03d01` 的 SHA 已经写进对外 README 与 Release 说明，rebase 会改写它们并造成文档返工。
+- **冲突与解决**：`README.md`（上游改的是它自己的 README，本仓库早已换成对外 README）与 `scripts/build-release.py`（两边都大改）→ 两者都取 `--ours`；`README.upstream.md` 用 `git show a1a5313:README.md` 覆盖为上游最新版（含「开源协议」章节）；`LICENSE` 自动合并、逐字节等于上游。
+- 合并提交：**`36f01c9`**（父提交 `eb03d01` + `a1a5313`）。
+
+### H.4 重新打包与哈希（**现行值**）
+
+把 `RUNTIME_FILES` 改为以 `"LICENSE",` 开头后，三个目标**都从 36 文件变成 37 文件**：
+
+| 产物 | 文件数 | 字节 | SHA256 | 旧值（已作废） |
+|---|---|---|---|---|
+| Chrome | 37 | 498698 | `FDBC9C0C66A4596F62AD6A7074C587227BE84AF1255254D88B68417CAF241444` | 497984 / `CD72FF72…` |
+| Firefox 直装版（min 115） | 37 | 498779 | `C826F4F41508CB444BAC53454543D04E0B21B36A788C133756BFC5D16C5B19C8` | 498065 / `F2A5D3CC…` |
+| Firefox AMO 版（min 140 + dcp） | 37 | 498812 | `6DCA6DEC48AB4FA3AFCE8DC316173DFA6069115D9E0D5FC82F455D79A6909C9E` | 498098 / `34B951EA…` |
+
+- 归档内 `LICENSE` 与上游**逐字节一致**（首行 `MIT License`，第三行 `Copyright (c) 2026 yiiiii`）。
+- 确定性不变：同一目标重复构建哈希相同（脚本给归档写固定时间戳）。
+- 交付目录 `dist/` 的三个文件已同步为新包。
+
+### H.5 加 `LICENSE` 后的回归与静态检查
+
+| 检查 | 结果 |
+|---|---|
+| addons-linter 10.14.0 · Firefox 直装版 | **errors 0 / warnings 7 / notices 0** —— `MISSING_DATA_COLLECTION_PERMISSIONS` + 4×`UNSAFE_VAR_ASSIGNMENT`（`content-reading-position.js:124`、`dialog.js:117`、`dialog.js:534`、`picker-ui.js:94`）+ 2×`UNSUPPORTED_API sidePanel.setPanelBehavior`（`background.js:266`、`:268`）。与加 `LICENSE` 前**完全一致** |
+| addons-linter 10.14.0 · Firefox AMO 版 | **errors 0 / warnings 7 / notices 0** —— `KEY_FIREFOX_ANDROID_UNSUPPORTED_BY_MIN_VERSION` + 同样 6 条 |
+| 53 项测试 | **51/53**（仍只有上游自带的 `background-modules.test.js`、`edit-item.test.js` 两个失败）—— 本轮只改打包器与文档，未动扩展源码 |
+
+原始 JSON：`work/lint-firefox-115.json`、`work/lint-firefox-amo.json`（并已同步到 `port-docs/`）。
+
+### H.6 发布面更新
+
+- GitHub 仓库：`license` 字段由空变为 **MIT**；`main` 分支推送了合并提交（`36f01c9`）与其后的文档提交。
+- Release `v1.66.1-ff-port`：两个附件**替换**为新包（大小/哈希见 H.4），正文改为 MIT 口径并保留「临时使用方法」全文。
+
+### H.7 本轮仍未做
+
+- **没有真的把包上传到 AMO 签名**（同上 G.10：需要账号 2FA 与 API key，且是不可逆的对外动作）。
+- **A-01~A-07 的有头人工点验未做**（按 `UI-人工点验清单.md` 执行）。
+- **「社区版 vs 官方版」的区分只做到文字层面**：扩展显示名仍是上游的 `LaterOn · 项目型网页管理`（`_locales/*/messages.json` 的 `extensionName` 未改）。上游 README 的协议要求是「注明原项目与修改内容、区分社区版与官方版」，本仓库已在 README/Release 层面显著标注，但**扩展自身界面尚未改名**；若要彻底区隔，需改 `extensionName` 并重打包（会影响三个产物的哈希）。
